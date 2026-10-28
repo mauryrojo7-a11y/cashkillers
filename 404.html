@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>VAULT BREAKER — Cyber-Bank Heist Arcade</title>
+    <meta name="description" content="VAULT BREAKER — Videojuego Arcade de Riesgo vs. Recompensa con Ranking Mundial Diario y Poderes Tácticos." />
+    <meta name="theme-color" content="#060b11" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Vault Breaker" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="VAULT BREAKER" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <script type="module" crossorigin src="./assets/index-TnRH28Kb.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CsAHjbzz.css">
+  </head>
+  <body class="bg-[#060b11] text-slate-100 antialiased selection:bg-emerald-400 selection:text-slate-950 overflow-hidden">
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
