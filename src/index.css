@@ -1645,12 +1645,12 @@ button:disabled {
 
 .onboarding-country-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  max-height: 190px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  max-height: 210px;
   overflow-y: auto;
   touch-action: pan-y;
-  padding-right: 2px;
+  padding: 4px 2px;
 }
 
 .onboarding-country-chip {
@@ -1658,16 +1658,35 @@ button:disabled {
   flex-direction: column;
   align-items: center;
   gap: 1px;
+  min-height: 58px;
   padding: 6px 3px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  opacity: 0.72;
+  touch-action: manipulation;
+  transition:
+    transform 0.12s ease,
+    opacity 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.onboarding-country-chip:active {
+  transform: scale(0.96);
 }
 
 .onboarding-country-chip.selected {
-  border-color: var(--cyan-glow);
-  background: rgba(0, 242, 254, 0.14);
-  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+  border: 2px solid #22d3ee;
+  background: rgba(6, 182, 212, 0.3);
+  color: #ffffff;
+  opacity: 1;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(6, 182, 212, 0.3);
+}
+
+.onboarding-country-chip > span {
+  pointer-events: none;
 }
 
 .country-chip-flag {

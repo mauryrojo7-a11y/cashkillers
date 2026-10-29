@@ -36,6 +36,41 @@ import {
 
 const asArray = (data) => (Array.isArray(data) ? data : Object.values(data || {}));
 
+// Lista plana y segura de países para el modal de perfil (siempre se guarda el código de 2 letras)
+const COUNTRIES_LIST = [
+  { code: 'AR', flag: '🇦🇷', name: 'Argentina' },
+  { code: 'UY', flag: '🇺🇾', name: 'Uruguay' },
+  { code: 'CL', flag: '🇨🇱', name: 'Chile' },
+  { code: 'BR', flag: '🇧🇷', name: 'Brasil' },
+  { code: 'PY', flag: '🇵🇾', name: 'Paraguay' },
+  { code: 'BO', flag: '🇧🇴', name: 'Bolivia' },
+  { code: 'PE', flag: '🇵🇪', name: 'Perú' },
+  { code: 'CO', flag: '🇨🇴', name: 'Colombia' },
+  { code: 'MX', flag: '🇲🇽', name: 'México' },
+  { code: 'ES', flag: '🇪🇸', name: 'España' },
+  { code: 'US', flag: '🇺🇸', name: 'EE.UU.' },
+  { code: 'IT', flag: '🇮🇹', name: 'Italia' },
+];
+
+// Convierte cualquier valor legado (objeto, emoji de bandera, minúsculas) en un código de 2 letras válido
+function normalizeCountryCode(val) {
+  if (val && typeof val === 'object') return normalizeCountryCode(val.code);
+  if (typeof val !== 'string') return 'AR';
+  const trimmed = val.trim();
+  const byFlag = COUNTRIES_LIST.find((c) => c.flag === trimmed);
+  if (byFlag) return byFlag.code;
+  const upper = trimmed.toUpperCase();
+  return /^[A-Z]{2}$/.test(upper) ? upper : 'AR';
+}
+
+function getFlagForCode(code) {
+  const safeCode = normalizeCountryCode(code);
+  const local = COUNTRIES_LIST.find((c) => c.code === safeCode)?.flag;
+  if (local) return local;
+  const remote = getCountryFlag(safeCode);
+  return typeof remote === 'string' && remote ? remote : '🇦🇷';
+}
+
 const asText = (val, langKey = 'es', fallback = '') => {
   if (val == null) return fallback;
   if (typeof val === 'string' || typeof val === 'number') return String(val);
@@ -144,13 +179,11 @@ export default function App() {
   const [playerCountry, setPlayerCountry] = useState(() => {
     try {
       const nmaCountry = String(localStorage.getItem('nma_player_country') || '').trim();
-      if (nmaCountry) return nmaCountry;
+      if (nmaCountry) return normalizeCountryCode(nmaCountry);
     } catch {
       // ignore
     }
-    return typeof saved?.playerCountry === 'string' && saved.playerCountry
-      ? saved.playerCountry
-      : 'AR';
+    return normalizeCountryCode(saved?.playerCountry);
   });
 
   const [showOnboardingModal, setShowOnboardingModal] = useState(() => checkNeedsOnboarding());
@@ -163,15 +196,22 @@ export default function App() {
     }
     return '';
   });
-  const [onboardingCountryInput, setOnboardingCountryInput] = useState(() => {
+  // País temporal seleccionado dentro del modal de perfil (siempre código de 2 letras: 'AR', 'UY'...)
+  const [tempCountry, setTempCountryRaw] = useState(() => {
     try {
       const nmaCountry = String(localStorage.getItem('nma_player_country') || '').trim();
-      if (nmaCountry) return nmaCountry;
+      if (nmaCountry) return normalizeCountryCode(nmaCountry);
     } catch {
       // ignore
     }
     return 'AR';
   });
+  const setTempCountry = useCallback((code) => {
+    setTempCountryRaw(normalizeCountryCode(code));
+  }, []);
+  const countryTouchStartRef = useRef({ x: 0, y: 0 });
+  // Bloquea "clics fantasma" táctiles justo después de cerrar el modal de perfil
+  const ghostClickGuardUntilRef = useRef(0);
   const [onboardingError, setOnboardingError] = useState(false);
 
   // Estados de Economía Pro, Pase VIP, Aspectos (`equippedSkin` y `ownedSkins`), Varas 3D, Multiplicadores y Ciudades VIP
@@ -441,7 +481,7 @@ export default function App() {
       score: leaguePoints,
       level,
     });
-    setLiveLeaderboard(list);
+    setLiveLeaderboard(Array.isArray(list) ? list : []);
   }, [playerName, playerCountry, leaguePoints, level]);
 
   useEffect(() => {
@@ -452,14 +492,17 @@ export default function App() {
 
   const handleSaveOnboardingProfile = useCallback(
     async (e) => {
-      if (e) e.preventDefault();
-      const cleanName = (onboardingNameInput || '').trim().slice(0, 15);
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const cleanName = String(onboardingNameInput || '').trim().slice(0, 15);
       if (cleanName.length < 3 || cleanName === 'TÚ (Equilibrista)') {
         setOnboardingError(true);
         soundEngine.playMissAlert();
         return;
       }
-      const chosenCountry = String(onboardingCountryInput || 'AR').toUpperCase().slice(0, 2) || 'AR';
+      const chosenCountry = normalizeCountryCode(tempCountry);
       setOnboardingError(false);
       setPlayerName(cleanName);
       setPlayerCountry(chosenCountry);
@@ -470,34 +513,70 @@ export default function App() {
       } catch {
         // ignore storage errors
       }
+
+      // Bloquear durante 600 ms cualquier toque "fantasma" que caiga sobre el menú recién visible
+      ghostClickGuardUntilRef.current = Date.now() + 600;
+      if (typeof document !== 'undefined' && document.activeElement?.blur) {
+        document.activeElement.blur();
+      }
+
+      // Cierre explícito del modal y retorno garantizado al Menú Principal
       setShowOnboardingModal(false);
+      setGameState('menu');
+      setActiveTab('home');
+
       soundEngine.init();
       soundEngine.playVictory();
       showToast(
         lang === 'es'
-          ? `✅ Perfil activo: ${getCountryFlag(chosenCountry)} ${cleanName}`
-          : `✅ Profile active: ${getCountryFlag(chosenCountry)} ${cleanName}`
+          ? `✅ Perfil activo: ${getFlagForCode(chosenCountry)} ${cleanName}`
+          : `✅ Profile active: ${getFlagForCode(chosenCountry)} ${cleanName}`
       );
-      setOnlineSyncStatus('syncing');
-      await syncPlayerScore(cleanName, chosenCountry, leaguePoints, level);
-      const updated = await getLiveLeaderboard({
-        name: cleanName,
-        country: chosenCountry,
-        score: leaguePoints,
-        level,
-      });
-      setLiveLeaderboard(updated);
-      setOnlineSyncStatus('live');
+
+      try {
+        setOnlineSyncStatus('syncing');
+        await syncPlayerScore(cleanName, chosenCountry, leaguePoints, level);
+        const updated = await getLiveLeaderboard({
+          name: cleanName,
+          country: chosenCountry,
+          score: leaguePoints,
+          level,
+        });
+        setLiveLeaderboard(Array.isArray(updated) ? updated : []);
+      } catch (err) {
+        console.warn('Leaderboard sync warning:', err);
+      } finally {
+        setOnlineSyncStatus('live');
+      }
     },
-    [onboardingNameInput, onboardingCountryInput, leaguePoints, level, lang, showToast]
+    [onboardingNameInput, tempCountry, leaguePoints, level, lang, showToast]
   );
 
   const openEditProfileModal = useCallback(() => {
-    setOnboardingNameInput(playerName || '');
-    setOnboardingCountryInput(playerCountry || 'AR');
+    setOnboardingNameInput(String(playerName || ''));
+    setTempCountry(playerCountry);
     setOnboardingError(false);
     setShowOnboardingModal(true);
-  }, [playerName, playerCountry]);
+  }, [playerName, playerCountry, setTempCountry]);
+
+  // Selección de bandera robusta para pantallas táctiles (ignora gestos de scroll en la grilla)
+  const handleCountryTouchStart = useCallback((e) => {
+    const touch = e.touches?.[0];
+    countryTouchStartRef.current = { x: touch?.clientX ?? 0, y: touch?.clientY ?? 0 };
+  }, []);
+
+  const handleCountryTouchEnd = useCallback(
+    (e, code) => {
+      const touch = e.changedTouches?.[0];
+      const dx = Math.abs((touch?.clientX ?? 0) - countryTouchStartRef.current.x);
+      const dy = Math.abs((touch?.clientY ?? 0) - countryTouchStartRef.current.y);
+      if (dx > 10 || dy > 10) return; // fue un desplazamiento, no un toque
+      e.preventDefault();
+      e.stopPropagation();
+      setTempCountry(code);
+    },
+    [setTempCountry]
+  );
 
   // ============================================================================
   // THREE.JS CONTAINER & PHYSICS ENGINE REFS
@@ -666,6 +745,8 @@ export default function App() {
   );
 
   const startPlay = () => {
+    // Ignorar el "clic fantasma" táctil que llega justo después de guardar el perfil
+    if (Date.now() < ghostClickGuardUntilRef.current) return;
     if (checkNeedsOnboarding()) {
       setShowOnboardingModal(true);
       return;
@@ -1785,21 +1866,21 @@ export default function App() {
   };
 
   const leaderboard =
-    liveLeaderboard.length > 0
+    Array.isArray(liveLeaderboard) && liveLeaderboard.length > 0
       ? liveLeaderboard
       : [
           {
             id: 'player_self',
-            name: playerName || 'Equilibrista',
-            country: playerCountry,
-            flag: getCountryFlag(playerCountry),
+            name: String(playerName || 'Equilibrista'),
+            country: normalizeCountryCode(playerCountry),
+            flag: getFlagForCode(playerCountry),
             score: leaguePoints,
             lp: leaguePoints,
             level,
             isPlayer: true,
           },
         ];
-  const playerRankIndex = leaderboard.findIndex((r) => r.isPlayer);
+  const playerRankIndex = leaderboard.findIndex((r) => r?.isPlayer);
   const playerRank = playerRankIndex >= 0 ? playerRankIndex + 1 : 1;
 
   const windDirArrow =
@@ -1813,7 +1894,8 @@ export default function App() {
     maxUnlockedCity,
     Math.min(19, Math.floor((level - 1) / 5))
   );
-  const playerFlagEmoji = getCountryFlag(playerCountry);
+  // Siempre un emoji de bandera (string), nunca un objeto crudo en JSX
+  const playerFlagEmoji = getFlagForCode(playerCountry);
 
   return (
     <div className="app-root">
@@ -1869,7 +1951,8 @@ export default function App() {
                   id="onboarding-name-input"
                   type="text"
                   maxLength={15}
-                  autoFocus
+                  autoComplete="nickname"
+                  enterKeyHint="done"
                   className={`onboarding-input ${onboardingError ? 'input-error-shake' : ''}`}
                   placeholder={
                     lang === 'es'
@@ -1880,6 +1963,13 @@ export default function App() {
                   onChange={(e) => {
                     setOnboardingNameInput(e.target.value);
                     if (onboardingError) setOnboardingError(false);
+                  }}
+                  onKeyDown={(e) => {
+                    // "Enter" solo cierra el teclado; el guardado se hace con el botón
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
                   }}
                 />
                 {onboardingError && (
@@ -1894,34 +1984,41 @@ export default function App() {
               <div className="onboarding-field-group">
                 <label className="onboarding-label">
                   {lang === 'es'
-                    ? '2. SELECCIONÁ TU PAÍS / BANDERA'
-                    : '2. SELECT YOUR COUNTRY / FLAG'}
+                    ? `2. SELECCIONÁ TU PAÍS / BANDERA — ${getFlagForCode(tempCountry)} ${tempCountry}`
+                    : `2. SELECT YOUR COUNTRY / FLAG — ${getFlagForCode(tempCountry)} ${tempCountry}`}
                 </label>
-                <div className="onboarding-country-grid">
-                  {asArray(COUNTRIES).map((c) => {
-                    const selected = onboardingCountryInput === c.code;
+                <div className="onboarding-country-grid" role="radiogroup">
+                  {COUNTRIES_LIST.map((c) => {
+                    const selected = tempCountry === c.code;
                     return (
                       <button
                         type="button"
                         key={c.code}
+                        role="radio"
+                        aria-checked={selected}
                         className={`onboarding-country-chip ${selected ? 'selected' : ''}`}
-                        onClick={() =>
-                          setOnboardingCountryInput(String(c.code || 'AR').toUpperCase().slice(0, 2))
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTempCountry(c.code);
+                        }}
+                        onTouchStart={handleCountryTouchStart}
+                        onTouchEnd={(e) => handleCountryTouchEnd(e, c.code)}
                       >
-                        <span className="country-chip-flag">{String(c.flag || '🏳️')}</span>
-                        <span className="country-chip-code">{String(c.code || 'AR')}</span>
-                        <span className="country-chip-name">{asText(c.name, lang, 'País')}</span>
+                        <span className="country-chip-flag">{c.flag}</span>
+                        <span className="country-chip-code">{c.code}</span>
+                        <span className="country-chip-name">{c.name}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              <button type="submit" className="onboarding-submit-btn">
-                {lang === 'es'
-                  ? '🚀 GUARDAR Y ENTRAR A COMPETIR'
-                  : '🚀 SAVE & START COMPETING'}
+              <button
+                type="button"
+                className="onboarding-submit-btn"
+                onClick={handleSaveOnboardingProfile}
+              >
+                {lang === 'es' ? '🚀 GUARDAR Y ENTRAR AL JUEGO' : '🚀 SAVE & ENTER THE GAME'}
               </button>
             </form>
           </div>
