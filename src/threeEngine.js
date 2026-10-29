@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CITIES, SKINS_CATALOG, resolveSkinKey, resolveSkinVisual } from './gameData';
+import { CITIES, SKINS_CATALOG, getSafeSkin, resolveSkinKey, resolveSkinVisual } from './gameData';
 import { populateCityLandmark3D } from './landmarks3D';
 
 export const CRITICAL_ANGLE_RAD = 0.82; // ~47 degrees critical fall angle
@@ -107,6 +107,7 @@ function createSkyscraperWindowTexture(isDistant = false) {
 }
 
 export function buildThreeWorld(mountEl) {
+  if (!mountEl) return null;
   const width = mountEl.clientWidth || 420;
   const height = mountEl.clientHeight || 780;
 
@@ -118,17 +119,23 @@ export function buildThreeWorld(mountEl) {
   camera.position.set(0, 3.4, 6.2);
   camera.lookAt(0, 1.65, -15);
 
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.25;
+  let renderer = null;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
 
-  mountEl.innerHTML = '';
-  mountEl.appendChild(renderer.domElement);
+    mountEl.innerHTML = '';
+    mountEl.appendChild(renderer.domElement);
+  } catch (err) {
+    console.warn('WebGLRenderer initialization warning:', err);
+    return null;
+  }
 
   const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.9);
   scene.add(ambientLight);
@@ -1368,154 +1375,190 @@ export function buildThreeWorld(mountEl) {
 // BLOQUE 2: MUTACIÓN REAL EN VIVO DEL MODELO 3D (`applySkinToAcrobat`)
 // ============================================================================
 export function applySkinToAcrobat(skinId, threeCtxOverride = null, isFever = false) {
-  const ctx = threeCtxOverride || activeThreeCtxRef;
-  if (!ctx) return null;
+  const skin = getSafeSkin(skinId);
+  try {
+    const ctx = threeCtxOverride || activeThreeCtxRef;
+    if (!ctx || !ctx.acrobatGroup) return skin;
 
-  const skinKey = resolveSkinKey(skinId);
-  const skin = SKINS_CATALOG[skinKey] || SKINS_CATALOG.urbano;
-  const styleType = skin.styleType || skinKey;
-  const metalVal = skin.metalness ?? 0.45;
-  const roughVal = skin.roughness ?? 0.35;
-  const stripEmissiveInt = isFever ? 3.2 : skin.emissiveIntensity ?? 2.2;
-  const feverColorHex = 0xfde047;
+    const skinKey = resolveSkinKey(skinId);
+    const styleType = skin.styleType || skinKey;
+    const metalVal = skin.metalness ?? 0.45;
+    const roughVal = skin.roughness ?? 0.35;
+    const stripEmissiveInt = isFever ? 3.2 : skin.emissiveIntensity ?? 2.2;
+    const feverColorHex = 0xfde047;
 
-  // 1. Actualizar inmediatamente `.color.set(...)`, `.emissive.set(...)` y `.emissiveIntensity` en todos los materiales del cuerpo
-  if (ctx.torsoMat) {
-    ctx.torsoMat.color.set(skin.torsoColor || skin.jacketHex);
-    ctx.torsoMat.emissive.set(isFever ? feverColorHex : skin.torsoEmissive || skin.jacketEmissiveHex);
-    ctx.torsoMat.emissiveIntensity = isFever ? 1.15 : skin.torsoEmissiveIntensity ?? 0.6;
-    ctx.torsoMat.metalness = metalVal;
-    ctx.torsoMat.roughness = roughVal;
-    ctx.torsoMat.needsUpdate = true;
+    // 1. Actualizar inmediatamente `.color.set(...)`, `.emissive.set(...)` y `.emissiveIntensity` en todos los materiales del cuerpo
+    if (ctx.torsoMat) {
+      ctx.torsoMat.color?.set(skin.torsoColor || skin.jacketHex || 0x1e293b);
+      ctx.torsoMat.emissive?.set(
+        isFever ? feverColorHex : skin.torsoEmissive || skin.jacketEmissiveHex || 0x0b1829
+      );
+      ctx.torsoMat.emissiveIntensity = isFever ? 1.15 : skin.torsoEmissiveIntensity ?? 0.6;
+      ctx.torsoMat.metalness = metalVal;
+      ctx.torsoMat.roughness = roughVal;
+      ctx.torsoMat.needsUpdate = true;
+    }
+
+    if (ctx.limbsMat) {
+      ctx.limbsMat.color?.set(skin.limbsColor || skin.pantsHex || 0x0f172a);
+      ctx.limbsMat.emissive?.set(
+        isFever ? feverColorHex : skin.limbsEmissive || skin.pantsHex || 0x070d19
+      );
+      ctx.limbsMat.emissiveIntensity = isFever ? 0.95 : skin.limbsEmissiveIntensity ?? 0.45;
+      ctx.limbsMat.metalness = metalVal;
+      ctx.limbsMat.roughness = roughVal;
+      ctx.limbsMat.needsUpdate = true;
+    }
+
+    if (ctx.neonStripMat) {
+      ctx.neonStripMat.color?.set(
+        isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex || 0x38bdf8
+      );
+      ctx.neonStripMat.emissive?.set(
+        isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex || 0x38bdf8
+      );
+      ctx.neonStripMat.emissiveIntensity = stripEmissiveInt;
+      ctx.neonStripMat.needsUpdate = true;
+    }
+
+    if (ctx.shoesMat) {
+      ctx.shoesMat.color?.set(skin.shoesColor || skin.bootHex || 0x334155);
+      ctx.shoesMat.emissive?.set(
+        isFever ? feverColorHex : skin.shoesColor || skin.soleHex || 0x38bdf8
+      );
+      ctx.shoesMat.emissiveIntensity = isFever ? 1.4 : styleType === 'urbano' ? 0.35 : 1.15;
+      ctx.shoesMat.metalness = metalVal;
+      ctx.shoesMat.roughness = roughVal;
+      ctx.shoesMat.needsUpdate = true;
+    }
+
+    if (ctx.glovesMat) {
+      ctx.glovesMat.color?.set(skin.glovesColor || skin.gloveHex || 0x334155);
+      ctx.glovesMat.emissive?.set(
+        isFever ? feverColorHex : skin.glovesColor || skin.wristHex || 0x38bdf8
+      );
+      ctx.glovesMat.emissiveIntensity =
+        styleType === 'ilusionista' ||
+        styleType === 'quantum_specter' ||
+        styleType === 'immortal_legend'
+          ? 1.75
+          : 0.65;
+      ctx.glovesMat.metalness = metalVal;
+      ctx.glovesMat.roughness = roughVal;
+      ctx.glovesMat.needsUpdate = true;
+    }
+
+    if (ctx.headbandMat) {
+      ctx.headbandMat.color?.set(
+        isFever ? feverColorHex : skin.headbandColor || skin.headbandHex || 0x38bdf8
+      );
+      ctx.headbandMat.emissive?.set(
+        isFever ? feverColorHex : skin.headbandColor || skin.headbandHex || 0x38bdf8
+      );
+      ctx.headbandMat.emissiveIntensity = stripEmissiveInt * 0.9;
+      ctx.headbandMat.needsUpdate = true;
+    }
+
+    if (ctx.soleMat) {
+      ctx.soleMat.color?.set(skin.soleColor || skin.soleHex || 0x38bdf8);
+      ctx.soleMat.emissive?.set(
+        isFever ? feverColorHex : skin.soleColor || skin.soleHex || 0x38bdf8
+      );
+      ctx.soleMat.emissiveIntensity = stripEmissiveInt * 0.85;
+      ctx.soleMat.needsUpdate = true;
+    }
+
+    if (ctx.wristBandMat) {
+      ctx.wristBandMat.color?.set(skin.wristColor || skin.wristHex || 0x38bdf8);
+      ctx.wristBandMat.emissive?.set(
+        isFever ? feverColorHex : skin.wristColor || skin.wristHex || 0x38bdf8
+      );
+      ctx.wristBandMat.emissiveIntensity = stripEmissiveInt * 0.9;
+      ctx.wristBandMat.needsUpdate = true;
+    }
+
+    if (ctx.ribbonMat) {
+      ctx.ribbonMat.color?.set(
+        isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex || 0x38bdf8
+      );
+      ctx.ribbonMat.emissive?.set(
+        isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex || 0x38bdf8
+      );
+      ctx.ribbonMat.emissiveIntensity = stripEmissiveInt * 0.9;
+      ctx.ribbonMat.needsUpdate = true;
+    }
+
+    if (ctx.acrobatBackLight) {
+      ctx.acrobatBackLight.color?.set(
+        isFever ? feverColorHex : skin.neonStripColor || skin.rimHex || 0x38bdf8
+      );
+    }
+
+    const ribbonLengthScale =
+      styleType === 'shinobi' || styleType === 'immortal_legend'
+        ? 1.48
+        : styleType === 'ilusionista' || styleType === 'ronin_gold'
+        ? 1.32
+        : 1.0;
+    if (ctx.ribbonPivot) {
+      ctx.ribbonPivot.scale.set(ribbonLengthScale, 1, 1);
+    }
+
+    // 2. Activar/desactivar (`.visible = true / false`) sub-grupos 3D de accesorios según la skin equipada
+    const isUrbano = styleType === 'urbano';
+    const isNightRunner = styleType === 'night_runner';
+    const isInfiltrado = styleType === 'infiltrado';
+    const isIlusionista = styleType === 'ilusionista';
+    const isShinobi = styleType === 'shinobi';
+    const isRoninGold = styleType === 'ronin_gold';
+    const isQuantumSpecter = styleType === 'quantum_specter';
+    const isGolden = styleType === 'immortal_legend' || styleType === 'leyenda_dorada';
+
+    if (ctx.urbanoAccGroup) ctx.urbanoAccGroup.visible = isUrbano;
+    if (ctx.leftLeg?.cargoPocketMesh) ctx.leftLeg.cargoPocketMesh.visible = isUrbano;
+    if (ctx.rightLeg?.cargoPocketMesh) ctx.rightLeg.cargoPocketMesh.visible = isUrbano;
+
+    if (ctx.nightRunnerAccGroup) ctx.nightRunnerAccGroup.visible = isNightRunner;
+    if (ctx.leftArm?.sleeveReflectiveMesh) ctx.leftArm.sleeveReflectiveMesh.visible = isNightRunner;
+    if (ctx.rightArm?.sleeveReflectiveMesh)
+      ctx.rightArm.sleeveReflectiveMesh.visible = isNightRunner;
+    if (ctx.leftLeg?.thighReflectiveMesh) ctx.leftLeg.thighReflectiveMesh.visible = isNightRunner;
+    if (ctx.rightLeg?.thighReflectiveMesh) ctx.rightLeg.thighReflectiveMesh.visible = isNightRunner;
+    if (ctx.leftLeg?.calfReflectiveMesh) ctx.leftLeg.calfReflectiveMesh.visible = isNightRunner;
+    if (ctx.rightLeg?.calfReflectiveMesh) ctx.rightLeg.calfReflectiveMesh.visible = isNightRunner;
+
+    if (ctx.infiltradoAccGroup) ctx.infiltradoAccGroup.visible = isInfiltrado;
+    if (ctx.tacticalVisorMesh) ctx.tacticalVisorMesh.visible = isInfiltrado || isQuantumSpecter;
+    if (ctx.leftLeg?.tacticalKneeNeon)
+      ctx.leftLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+    if (ctx.rightLeg?.tacticalKneeNeon)
+      ctx.rightLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+    if (ctx.leftLeg?.tacticalHeelNeon)
+      ctx.leftLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
+    if (ctx.rightLeg?.tacticalHeelNeon)
+      ctx.rightLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
+
+    if (ctx.ilusionistaAccGroup) ctx.ilusionistaAccGroup.visible = isIlusionista;
+
+    // Sub-grupos 3D requeridos en BLOQUE 2:
+    if (ctx.shinobiAccGroup) ctx.shinobiAccGroup.visible = isShinobi;
+    if (ctx.singleKatanaMesh) ctx.singleKatanaMesh.visible = isShinobi;
+    if (ctx.leftLeg?.shinobiBootThruster) ctx.leftLeg.shinobiBootThruster.visible = isShinobi;
+    if (ctx.rightLeg?.shinobiBootThruster) ctx.rightLeg.shinobiBootThruster.visible = isShinobi;
+
+    if (ctx.roninGoldAccGroup) ctx.roninGoldAccGroup.visible = isRoninGold;
+    if (ctx.dualGoldKatanasGroup) ctx.dualGoldKatanasGroup.visible = isRoninGold;
+    if (ctx.samuraiShouldersGroup) ctx.samuraiShouldersGroup.visible = isRoninGold || isGolden;
+
+    if (ctx.quantumSpecterAccGroup) ctx.quantumSpecterAccGroup.visible = isQuantumSpecter;
+    if (ctx.quantumHaloMesh) ctx.quantumHaloMesh.visible = isQuantumSpecter;
+
+    if (ctx.goldenLegendAccGroup) ctx.goldenLegendAccGroup.visible = isGolden;
+    if (ctx.immortalCrownMesh) ctx.immortalCrownMesh.visible = isGolden;
+    if (ctx.goldenCrownHalo) ctx.goldenCrownHalo.visible = isGolden;
+  } catch (e) {
+    console.warn('applySkinToAcrobat safe catch:', e);
   }
-
-  if (ctx.limbsMat) {
-    ctx.limbsMat.color.set(skin.limbsColor || skin.pantsHex);
-    ctx.limbsMat.emissive.set(isFever ? feverColorHex : skin.limbsEmissive || skin.pantsHex);
-    ctx.limbsMat.emissiveIntensity = isFever ? 0.95 : skin.limbsEmissiveIntensity ?? 0.45;
-    ctx.limbsMat.metalness = metalVal;
-    ctx.limbsMat.roughness = roughVal;
-    ctx.limbsMat.needsUpdate = true;
-  }
-
-  if (ctx.neonStripMat) {
-    ctx.neonStripMat.color.set(isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex);
-    ctx.neonStripMat.emissive.set(isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex);
-    ctx.neonStripMat.emissiveIntensity = stripEmissiveInt;
-    ctx.neonStripMat.needsUpdate = true;
-  }
-
-  if (ctx.shoesMat) {
-    ctx.shoesMat.color.set(skin.shoesColor || skin.bootHex);
-    ctx.shoesMat.emissive.set(isFever ? feverColorHex : skin.shoesColor || skin.soleHex);
-    ctx.shoesMat.emissiveIntensity = isFever ? 1.4 : styleType === 'urbano' ? 0.35 : 1.15;
-    ctx.shoesMat.metalness = metalVal;
-    ctx.shoesMat.roughness = roughVal;
-    ctx.shoesMat.needsUpdate = true;
-  }
-
-  if (ctx.glovesMat) {
-    ctx.glovesMat.color.set(skin.glovesColor || skin.gloveHex);
-    ctx.glovesMat.emissive.set(isFever ? feverColorHex : skin.glovesColor || skin.wristHex);
-    ctx.glovesMat.emissiveIntensity =
-      styleType === 'ilusionista' || styleType === 'quantum_specter' || styleType === 'immortal_legend'
-        ? 1.75
-        : 0.65;
-    ctx.glovesMat.metalness = metalVal;
-    ctx.glovesMat.roughness = roughVal;
-    ctx.glovesMat.needsUpdate = true;
-  }
-
-  if (ctx.headbandMat) {
-    ctx.headbandMat.color.set(isFever ? feverColorHex : skin.headbandColor || skin.headbandHex);
-    ctx.headbandMat.emissive.set(isFever ? feverColorHex : skin.headbandColor || skin.headbandHex);
-    ctx.headbandMat.emissiveIntensity = stripEmissiveInt * 0.9;
-    ctx.headbandMat.needsUpdate = true;
-  }
-
-  if (ctx.soleMat) {
-    ctx.soleMat.color.set(skin.soleColor || skin.soleHex);
-    ctx.soleMat.emissive.set(isFever ? feverColorHex : skin.soleColor || skin.soleHex);
-    ctx.soleMat.emissiveIntensity = stripEmissiveInt * 0.85;
-    ctx.soleMat.needsUpdate = true;
-  }
-
-  if (ctx.wristBandMat) {
-    ctx.wristBandMat.color.set(skin.wristColor || skin.wristHex);
-    ctx.wristBandMat.emissive.set(isFever ? feverColorHex : skin.wristColor || skin.wristHex);
-    ctx.wristBandMat.emissiveIntensity = stripEmissiveInt * 0.9;
-    ctx.wristBandMat.needsUpdate = true;
-  }
-
-  if (ctx.ribbonMat) {
-    ctx.ribbonMat.color.set(isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex);
-    ctx.ribbonMat.emissive.set(isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex);
-    ctx.ribbonMat.emissiveIntensity = stripEmissiveInt * 0.9;
-    ctx.ribbonMat.needsUpdate = true;
-  }
-
-  if (ctx.acrobatBackLight) {
-    ctx.acrobatBackLight.color.set(isFever ? feverColorHex : skin.neonStripColor || skin.rimHex);
-  }
-
-  const ribbonLengthScale =
-    styleType === 'shinobi' || styleType === 'immortal_legend'
-      ? 1.48
-      : styleType === 'ilusionista' || styleType === 'ronin_gold'
-      ? 1.32
-      : 1.0;
-  if (ctx.ribbonPivot) {
-    ctx.ribbonPivot.scale.set(ribbonLengthScale, 1, 1);
-  }
-
-  // 2. Activar/desactivar (`.visible = true / false`) sub-grupos 3D de accesorios según la skin equipada
-  const isUrbano = styleType === 'urbano';
-  const isNightRunner = styleType === 'night_runner';
-  const isInfiltrado = styleType === 'infiltrado';
-  const isIlusionista = styleType === 'ilusionista';
-  const isShinobi = styleType === 'shinobi';
-  const isRoninGold = styleType === 'ronin_gold';
-  const isQuantumSpecter = styleType === 'quantum_specter';
-  const isGolden = styleType === 'immortal_legend' || styleType === 'leyenda_dorada';
-
-  if (ctx.urbanoAccGroup) ctx.urbanoAccGroup.visible = isUrbano;
-  if (ctx.leftLeg?.cargoPocketMesh) ctx.leftLeg.cargoPocketMesh.visible = isUrbano;
-  if (ctx.rightLeg?.cargoPocketMesh) ctx.rightLeg.cargoPocketMesh.visible = isUrbano;
-
-  if (ctx.nightRunnerAccGroup) ctx.nightRunnerAccGroup.visible = isNightRunner;
-  if (ctx.leftArm?.sleeveReflectiveMesh) ctx.leftArm.sleeveReflectiveMesh.visible = isNightRunner;
-  if (ctx.rightArm?.sleeveReflectiveMesh) ctx.rightArm.sleeveReflectiveMesh.visible = isNightRunner;
-  if (ctx.leftLeg?.thighReflectiveMesh) ctx.leftLeg.thighReflectiveMesh.visible = isNightRunner;
-  if (ctx.rightLeg?.thighReflectiveMesh) ctx.rightLeg.thighReflectiveMesh.visible = isNightRunner;
-  if (ctx.leftLeg?.calfReflectiveMesh) ctx.leftLeg.calfReflectiveMesh.visible = isNightRunner;
-  if (ctx.rightLeg?.calfReflectiveMesh) ctx.rightLeg.calfReflectiveMesh.visible = isNightRunner;
-
-  if (ctx.infiltradoAccGroup) ctx.infiltradoAccGroup.visible = isInfiltrado;
-  if (ctx.tacticalVisorMesh) ctx.tacticalVisorMesh.visible = isInfiltrado || isQuantumSpecter;
-  if (ctx.leftLeg?.tacticalKneeNeon) ctx.leftLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
-  if (ctx.rightLeg?.tacticalKneeNeon) ctx.rightLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
-  if (ctx.leftLeg?.tacticalHeelNeon) ctx.leftLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
-  if (ctx.rightLeg?.tacticalHeelNeon) ctx.rightLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
-
-  if (ctx.ilusionistaAccGroup) ctx.ilusionistaAccGroup.visible = isIlusionista;
-
-  // Sub-grupos 3D requeridos en BLOQUE 2:
-  if (ctx.shinobiAccGroup) ctx.shinobiAccGroup.visible = isShinobi;
-  if (ctx.singleKatanaMesh) ctx.singleKatanaMesh.visible = isShinobi;
-  if (ctx.leftLeg?.shinobiBootThruster) ctx.leftLeg.shinobiBootThruster.visible = isShinobi;
-  if (ctx.rightLeg?.shinobiBootThruster) ctx.rightLeg.shinobiBootThruster.visible = isShinobi;
-
-  if (ctx.roninGoldAccGroup) ctx.roninGoldAccGroup.visible = isRoninGold;
-  if (ctx.dualGoldKatanasGroup) ctx.dualGoldKatanasGroup.visible = isRoninGold;
-  if (ctx.samuraiShouldersGroup) ctx.samuraiShouldersGroup.visible = isRoninGold || isGolden;
-
-  if (ctx.quantumSpecterAccGroup) ctx.quantumSpecterAccGroup.visible = isQuantumSpecter;
-  if (ctx.quantumHaloMesh) ctx.quantumHaloMesh.visible = isQuantumSpecter;
-
-  if (ctx.goldenLegendAccGroup) ctx.goldenLegendAccGroup.visible = isGolden;
-  if (ctx.immortalCrownMesh) ctx.immortalCrownMesh.visible = isGolden;
-  if (ctx.goldenCrownHalo) ctx.goldenCrownHalo.visible = isGolden;
-
   return skin;
 }
 

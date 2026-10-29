@@ -6,6 +6,7 @@ import {
   SKINS,
   SKINS_CATALOG,
   SKIN_VISUALS,
+  getSafeSkin,
   resolveSkinKey,
   resolveSkinObject,
   resolveSkinVisual,
@@ -33,12 +34,36 @@ import {
   updateAndRenderThreeScene,
 } from './threeEngine';
 
+function toSafeArray(val, fallback = []) {
+  return Array.isArray(val) ? val.filter((item) => typeof item === 'string') : fallback;
+}
+
+function toSafeInt(val, fallback = 0, min = 0, max = 999999999) {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(num)));
+}
+
+function toSafeGearLevels(val) {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) {
+    return { pole: 0, boots: 0, gloves: 0 };
+  }
+  return {
+    pole: toSafeInt(val.pole, 0, 0, 10),
+    boots: toSafeInt(val.boots, 0, 0, 10),
+    gloves: toSafeInt(val.gloves, 0, 0, 10),
+  };
+}
+
 function loadSavedData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed;
+  } catch (e) {
+    console.warn('Corrupted STORAGE_KEY reset:', e);
     return null;
   }
 }
@@ -46,8 +71,8 @@ function loadSavedData() {
 function checkNeedsOnboarding() {
   try {
     const completed = localStorage.getItem('nma_profile_completed') === 'true';
-    const savedName = (localStorage.getItem('nma_player_name') || '').trim();
-    const savedCountry = (localStorage.getItem('nma_player_country') || '').trim();
+    const savedName = String(localStorage.getItem('nma_player_name') || '').trim();
+    const savedCountry = String(localStorage.getItem('nma_player_country') || '').trim();
     if (
       !completed ||
       !savedName ||
@@ -76,42 +101,46 @@ export default function App() {
     })()
   ).current;
 
-  const [lang, setLang] = useState(saved?.lang || 'es');
-  const [level, setLevel] = useState(saved?.level || 1);
-  const [maxUnlockedCity, setMaxUnlockedCity] = useState(
-    saved?.maxUnlockedCity ?? Math.min(19, Math.floor(((saved?.level || 1) - 1) / 5))
-  );
-  const [coins, setCoins] = useState(saved?.coins ?? 1200);
-  const [gems, setGems] = useState(saved?.gems ?? 60);
-  const [bestScore, setBestScore] = useState(saved?.bestScore || 0);
-  const [leaguePoints, setLeaguePoints] = useState(saved?.leaguePoints ?? 320);
+  const [lang, setLang] = useState(saved?.lang === 'en' ? 'en' : 'es');
+  const [level, setLevel] = useState(() => toSafeInt(saved?.level, 1, 1, 9999));
+  const [maxUnlockedCity, setMaxUnlockedCity] = useState(() => {
+    const initialLvl = toSafeInt(saved?.level, 1, 1, 9999);
+    const fallbackCity = Math.min(19, Math.floor((initialLvl - 1) / 5));
+    return toSafeInt(saved?.maxUnlockedCity, fallbackCity, 0, 19);
+  });
+  const [coins, setCoins] = useState(() => toSafeInt(saved?.coins, 1200, 0));
+  const [gems, setGems] = useState(() => toSafeInt(saved?.gems, 60, 0));
+  const [bestScore, setBestScore] = useState(() => toSafeInt(saved?.bestScore, 0, 0));
+  const [leaguePoints, setLeaguePoints] = useState(() => toSafeInt(saved?.leaguePoints, 320, 0));
 
   const [playerName, setPlayerName] = useState(() => {
     try {
-      const nmaName = (localStorage.getItem('nma_player_name') || '').trim();
+      const nmaName = String(localStorage.getItem('nma_player_name') || '').trim();
       if (nmaName && nmaName !== 'TÚ (Equilibrista)') return nmaName;
     } catch {
       // ignore
     }
-    const oldName = (saved?.playerName || '').trim();
+    const oldName = typeof saved?.playerName === 'string' ? saved.playerName.trim() : '';
     if (oldName && oldName !== 'TÚ (Equilibrista)') return oldName;
     return '';
   });
 
   const [playerCountry, setPlayerCountry] = useState(() => {
     try {
-      const nmaCountry = (localStorage.getItem('nma_player_country') || '').trim();
+      const nmaCountry = String(localStorage.getItem('nma_player_country') || '').trim();
       if (nmaCountry) return nmaCountry;
     } catch {
       // ignore
     }
-    return saved?.playerCountry || 'AR';
+    return typeof saved?.playerCountry === 'string' && saved.playerCountry
+      ? saved.playerCountry
+      : 'AR';
   });
 
   const [showOnboardingModal, setShowOnboardingModal] = useState(() => checkNeedsOnboarding());
   const [onboardingNameInput, setOnboardingNameInput] = useState(() => {
     try {
-      const nmaName = (localStorage.getItem('nma_player_name') || '').trim();
+      const nmaName = String(localStorage.getItem('nma_player_name') || '').trim();
       if (nmaName && nmaName !== 'TÚ (Equilibrista)') return nmaName;
     } catch {
       // ignore
@@ -120,7 +149,7 @@ export default function App() {
   });
   const [onboardingCountryInput, setOnboardingCountryInput] = useState(() => {
     try {
-      const nmaCountry = (localStorage.getItem('nma_player_country') || '').trim();
+      const nmaCountry = String(localStorage.getItem('nma_player_country') || '').trim();
       if (nmaCountry) return nmaCountry;
     } catch {
       // ignore
@@ -130,36 +159,39 @@ export default function App() {
   const [onboardingError, setOnboardingError] = useState(false);
 
   // Estados de Economía Pro, Pase VIP, Aspectos (`equippedSkin` y `ownedSkins`), Varas 3D, Multiplicadores y Ciudades VIP
-  const [vipPassActive, setVipPassActive] = useState(saved?.vipPassActive || false);
+  const [vipPassActive, setVipPassActive] = useState(Boolean(saved?.vipPassActive));
   const [unlockedSkins, setUnlockedSkins] = useState(() => {
     let storedOwned = [];
     try {
       const rawOwned = localStorage.getItem('nma_owned_skins');
-      if (rawOwned) storedOwned = JSON.parse(rawOwned);
+      if (rawOwned) {
+        const parsedOwned = JSON.parse(rawOwned);
+        if (Array.isArray(parsedOwned)) storedOwned = parsedOwned;
+      }
     } catch {
-      // ignore
+      storedOwned = [];
     }
     const rawList = [
-      ...(saved?.ownedSkins || []),
-      ...(saved?.unlockedSkins || []),
-      ...(Array.isArray(storedOwned) ? storedOwned : []),
+      ...toSafeArray(saved?.ownedSkins),
+      ...toSafeArray(saved?.unlockedSkins),
+      ...toSafeArray(storedOwned),
       'urbano',
     ];
-    const normalized = rawList.map((id) => resolveSkinKey(id));
+    const normalized = rawList.map((id) => getSafeSkin(id)?.id || 'urbano');
     if (!normalized.includes('urbano')) normalized.unshift('urbano');
     return Array.from(new Set(normalized));
   });
-  const ownedSkins = unlockedSkins;
+  const ownedSkins = Array.isArray(unlockedSkins) ? unlockedSkins : ['urbano'];
   const setOwnedSkins = setUnlockedSkins;
 
   const [equippedSkin, setEquippedSkin] = useState(() => {
     try {
       const savedEquipped = localStorage.getItem('nma_equipped_skin');
-      if (savedEquipped) return resolveSkinKey(savedEquipped);
+      if (savedEquipped) return getSafeSkin(savedEquipped)?.id || 'urbano';
     } catch {
       // ignore
     }
-    return resolveSkinKey(saved?.equippedSkin || 'urbano');
+    return getSafeSkin(saved?.equippedSkin || 'urbano')?.id || 'urbano';
   });
   const [previewSkin, setPreviewSkin] = useState(null);
   const [proCheckoutSkin, setProCheckoutSkin] = useState(null);
@@ -167,35 +199,52 @@ export default function App() {
   // BLOQUE 2.3: Sincronización inmediata en tiempo real (`equippedSkinRef.current` + `applySkinToAcrobat`)
   const equippedSkinRef = useRef(equippedSkin);
   useEffect(() => {
-    equippedSkinRef.current = equippedSkin;
-    applySkinToAcrobat(equippedSkin);
+    const safeId = getSafeSkin(equippedSkin)?.id || 'urbano';
+    equippedSkinRef.current = safeId;
+    applySkinToAcrobat(safeId);
     try {
-      localStorage.setItem('nma_equipped_skin', equippedSkin);
+      localStorage.setItem('nma_equipped_skin', safeId);
     } catch {
       // ignore
     }
   }, [equippedSkin]);
 
   useEffect(() => {
-    const activeId = previewSkin || equippedSkin;
+    const activeId = getSafeSkin(previewSkin || equippedSkin)?.id || 'urbano';
     equippedSkinRef.current = activeId;
     applySkinToAcrobat(activeId);
   }, [previewSkin, equippedSkin]);
 
-  const [unlockedPoles, setUnlockedPoles] = useState(saved?.unlockedPoles || ['pole_basic']);
-  const [equippedPole, setEquippedPole] = useState(saved?.equippedPole || 'pole_basic');
-  const [ownedMultipliers, setOwnedMultipliers] = useState(saved?.ownedMultipliers || []);
-  const [unlockedVipCities, setUnlockedVipCities] = useState(saved?.unlockedVipCities || []);
-  const [activeVipCityId, setActiveVipCityId] = useState(saved?.activeVipCityId || null);
-  const [unlockedProps, setUnlockedProps] = useState(saved?.unlockedProps || ['balls']);
-  const [equippedProp, setEquippedProp] = useState(saved?.equippedProp || 'balls');
+  const [unlockedPoles, setUnlockedPoles] = useState(() => {
+    const list = toSafeArray(saved?.unlockedPoles, ['pole_basic']);
+    return list.length > 0 ? list : ['pole_basic'];
+  });
+  const [equippedPole, setEquippedPole] = useState(() =>
+    typeof saved?.equippedPole === 'string' ? saved.equippedPole : 'pole_basic'
+  );
+  const [ownedMultipliers, setOwnedMultipliers] = useState(() =>
+    toSafeArray(saved?.ownedMultipliers, [])
+  );
+  const [unlockedVipCities, setUnlockedVipCities] = useState(() =>
+    toSafeArray(saved?.unlockedVipCities, [])
+  );
+  const [activeVipCityId, setActiveVipCityId] = useState(() =>
+    typeof saved?.activeVipCityId === 'string' ? saved.activeVipCityId : null
+  );
+  const [unlockedProps, setUnlockedProps] = useState(() => {
+    const list = toSafeArray(saved?.unlockedProps, ['balls']);
+    return list.length > 0 ? list : ['balls'];
+  });
+  const [equippedProp, setEquippedProp] = useState(() =>
+    typeof saved?.equippedProp === 'string' ? saved.equippedProp : 'balls'
+  );
   const [gearLevels, setGearLevels] = useState(() => {
     if (!isEconomyV2Migrated) {
       return { pole: 0, boots: 0, gloves: 0 };
     }
-    return saved?.gearLevels || { pole: 0, boots: 0, gloves: 0 };
+    return toSafeGearLevels(saved?.gearLevels || saved?.upgrades);
   });
-  const [claimedTiers, setClaimedTiers] = useState(saved?.claimedTiers || []);
+  const [claimedTiers, setClaimedTiers] = useState(() => toSafeArray(saved?.claimedTiers, []));
   const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
   const [armorySubTab, setArmorySubTab] = useState('upgrades');
 
@@ -244,47 +293,50 @@ export default function App() {
   const t = I18N[lang] || I18N.es;
   const activeVipCity = VIP_CITIES.find((vc) => vc.id === activeVipCityId) || null;
   const cfg = getLevelConfig(level, activeVipCity);
-  const currentSkinObj = resolveSkinObject(equippedSkin);
-  const currentSkinVisual = resolveSkinVisual(equippedSkin);
-  const displayedSkinObj = resolveSkinObject(previewSkin || equippedSkin);
-  const displayedSkinVisual = resolveSkinVisual(previewSkin || equippedSkin);
+  const currentSkinObj = getSafeSkin(equippedSkin);
+  const currentSkinVisual = getSafeSkin(equippedSkin);
+  const displayedSkinObj = getSafeSkin(previewSkin || equippedSkin);
+  const displayedSkinVisual = getSafeSkin(previewSkin || equippedSkin);
   const currentPoleObj = BALANCE_POLES.find((p) => p.id === equippedPole) || BALANCE_POLES[0];
   const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
 
-  // PASO 3: Aplicación real del multiplicador del Aspecto (`x1`, `x1.2`, `x1.5`, `x2`, `x3`, `x3.5`)
+  // PASO 3: Aplicación real del multiplicador del Aspecto (`x1`, `x1.2`, `x1.5`, `x2`, `x3`, `x4`, `x5`, `x8`)
   // sobre Puntos, Monedas y LP ganados en partida
-  const permCoinMult = ownedMultipliers.reduce((acc, id) => {
+  const permCoinMult = (Array.isArray(ownedMultipliers) ? ownedMultipliers : []).reduce(
+    (acc, id) => {
+      const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
+      return m ? Math.max(acc, m.coinMult ?? 1) : acc;
+    },
+    1
+  );
+  const permLpMult = (Array.isArray(ownedMultipliers) ? ownedMultipliers : []).reduce((acc, id) => {
     const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
-    return m ? Math.max(acc, m.coinMult) : acc;
-  }, 1);
-  const permLpMult = ownedMultipliers.reduce((acc, id) => {
-    const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
-    return m ? Math.max(acc, m.lpMult) : acc;
+    return m ? Math.max(acc, m.lpMult ?? 1) : acc;
   }, 1);
 
-  const vipCityMult = activeVipCity ? activeVipCity.rewardMult : 1;
-  const skinMult = currentSkinObj.bonusMult || 1.0;
+  const vipCityMult = activeVipCity?.rewardMult ?? 1;
+  const skinMult = currentSkinObj?.mult ?? currentSkinObj?.bonusMult ?? 1.0;
 
   const totalScoreMultiplier = Number(
     (
-      currentPropObj.mult *
+      (currentPropObj?.mult ?? 1) *
       skinMult *
-      currentPoleObj.scoreMult *
+      (currentPoleObj?.scoreMult ?? 1) *
       permLpMult *
       vipCityMult
     ).toFixed(2)
   );
   const totalCoinMultiplier = Number(
     (
-      currentPropObj.mult *
+      (currentPropObj?.mult ?? 1) *
       skinMult *
-      currentPoleObj.coinMult *
+      (currentPoleObj?.coinMult ?? 1) *
       permCoinMult *
       vipCityMult
     ).toFixed(2)
   );
   const totalLpMultiplier = Number(
-    (skinMult * currentPoleObj.scoreMult * permLpMult * vipCityMult).toFixed(2)
+    (skinMult * (currentPoleObj?.scoreMult ?? 1) * permLpMult * vipCityMult).toFixed(2)
   );
 
   useEffect(() => {
@@ -827,9 +879,9 @@ export default function App() {
       const dt = Math.min(0.05, Math.max(0.001, (now - (eng.lastTimestamp || now)) / 1000));
       eng.lastTimestamp = now;
 
-      // PASO 1: Leer SIEMPRE `equippedSkinRef.current` en tiempo real en cada frame
+      // PASO 1: Leer SIEMPRE `equippedSkinRef.current` en tiempo real en cada frame con `getSafeSkin`
       const liveSkinId = equippedSkinRef.current;
-      const liveSkinObj = resolveSkinObject(liveSkinId);
+      const liveSkinObj = getSafeSkin(liveSkinId);
       eng.skinObj = liveSkinObj;
 
       if (eng.floatingPopups.length > 0) {

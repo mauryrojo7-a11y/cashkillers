@@ -1230,13 +1230,24 @@ const SKIN_ALIAS_MAP = {
 };
 
 export function resolveSkinKey(skinId) {
-  if (!skinId) return 'urbano';
-  return SKIN_ALIAS_MAP[skinId] || (SKINS_CATALOG[skinId] ? skinId : 'urbano');
+  if (!skinId || typeof skinId !== 'string') return 'urbano';
+  const mapped = SKIN_ALIAS_MAP[skinId] || skinId;
+  return SKINS_CATALOG[mapped] ? mapped : 'urbano';
 }
 
+export const getSafeSkin = (id) => {
+  const safeId = typeof id === 'string' ? SKIN_ALIAS_MAP[id] || id : 'urbano';
+  const found =
+    SKINS_CATALOG[safeId] ||
+    SKINS_CATALOG[id] ||
+    Object.values(SKINS_CATALOG).find((s) => s.id === id || s.legacyId === id) ||
+    SKINS_CATALOG.urbano ||
+    Object.values(SKINS_CATALOG)[0];
+  return found ? { ...found, visual: found } : { id: 'urbano', key: 'urbano', mult: 1, bonusMult: 1 };
+};
+
 export function resolveSkinVisual(skinId) {
-  const key = resolveSkinKey(skinId);
-  return SKINS_CATALOG[key] || SKINS_CATALOG.urbano;
+  return getSafeSkin(skinId);
 }
 
 export const SKINS = Object.values(SKINS_CATALOG).map((sk) => ({
@@ -1245,8 +1256,7 @@ export const SKINS = Object.values(SKINS_CATALOG).map((sk) => ({
 }));
 
 export function resolveSkinObject(skinId) {
-  const key = resolveSkinKey(skinId);
-  return SKINS.find((s) => s.id === key || s.legacyId === skinId) || SKINS[0];
+  return getSafeSkin(skinId);
 }
 
 // ============================================================================
