@@ -4,6 +4,10 @@ import {
   CITIES,
   VIP_CITIES,
   SKINS,
+  SKIN_VISUALS,
+  resolveSkinKey,
+  resolveSkinObject,
+  resolveSkinVisual,
   BALANCE_POLES,
   PERMANENT_MULTIPLIERS,
   JUGGLE_PROPS,
@@ -123,10 +127,24 @@ export default function App() {
   });
   const [onboardingError, setOnboardingError] = useState(false);
 
-  // BLOQUE 1, 2, 3 y 4: Estados de Economía Pro, Pase VIP, Varas 3D, Multiplicadores y Ciudades VIP
+  // Estados de Economía Pro, Pase VIP, Aspectos (`equippedSkin`), Varas 3D, Multiplicadores y Ciudades VIP
   const [vipPassActive, setVipPassActive] = useState(saved?.vipPassActive || false);
-  const [unlockedSkins, setUnlockedSkins] = useState(saved?.unlockedSkins || ['skin_1']);
-  const [equippedSkin, setEquippedSkin] = useState(saved?.equippedSkin || 'skin_1');
+  const [unlockedSkins, setUnlockedSkins] = useState(() => {
+    const rawList = saved?.unlockedSkins || ['urbano'];
+    const normalized = rawList.map((id) => resolveSkinKey(id));
+    if (!normalized.includes('urbano')) normalized.unshift('urbano');
+    return Array.from(new Set(normalized));
+  });
+  const [equippedSkin, setEquippedSkin] = useState(() =>
+    resolveSkinKey(saved?.equippedSkin || 'urbano')
+  );
+
+  // PASO 1: Referencia sincronizada en tiempo real para `equippedSkin` en el motor 3D
+  const equippedSkinRef = useRef(equippedSkin);
+  useEffect(() => {
+    equippedSkinRef.current = equippedSkin;
+  }, [equippedSkin]);
+
   const [unlockedPoles, setUnlockedPoles] = useState(saved?.unlockedPoles || ['pole_basic']);
   const [equippedPole, setEquippedPole] = useState(saved?.equippedPole || 'pole_basic');
   const [ownedMultipliers, setOwnedMultipliers] = useState(saved?.ownedMultipliers || []);
@@ -145,6 +163,11 @@ export default function App() {
   const [armorySubTab, setArmorySubTab] = useState('upgrades');
 
   const [activeTab, setActiveTab] = useState('home');
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
   const [gameState, setGameState] = useState('menu'); // 'menu' | 'playing' | 'paused' | 'victory' | 'gameover'
   const [showAdModal, setShowAdModal] = useState(null); // null | 'revive' | 'double' | 'gems' | 'coins'
   const [adTimer, setAdTimer] = useState(2);
@@ -180,11 +203,13 @@ export default function App() {
   const t = I18N[lang] || I18N.es;
   const activeVipCity = VIP_CITIES.find((vc) => vc.id === activeVipCityId) || null;
   const cfg = getLevelConfig(level, activeVipCity);
-  const currentSkinObj = SKINS.find((s) => s.id === equippedSkin) || SKINS[0];
+  const currentSkinObj = resolveSkinObject(equippedSkin);
+  const currentSkinVisual = resolveSkinVisual(equippedSkin);
   const currentPoleObj = BALANCE_POLES.find((p) => p.id === equippedPole) || BALANCE_POLES[0];
   const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
 
-  // Multiplicadores combinados (Vara + Aspecto + Multiplicadores Permanentes + Ciudad VIP)
+  // PASO 3: Aplicación real del multiplicador del Aspecto (`x1`, `x1.2`, `x1.5`, `x2`, `x3`, `x3.5`)
+  // sobre Puntos, Monedas y LP ganados en partida
   const permCoinMult = ownedMultipliers.reduce((acc, id) => {
     const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
     return m ? Math.max(acc, m.coinMult) : acc;
@@ -195,10 +220,12 @@ export default function App() {
   }, 1);
 
   const vipCityMult = activeVipCity ? activeVipCity.rewardMult : 1;
+  const skinMult = currentSkinObj.bonusMult || 1.0;
+
   const totalScoreMultiplier = Number(
     (
       currentPropObj.mult *
-      currentSkinObj.bonusMult *
+      skinMult *
       currentPoleObj.scoreMult *
       permLpMult *
       vipCityMult
@@ -207,11 +234,14 @@ export default function App() {
   const totalCoinMultiplier = Number(
     (
       currentPropObj.mult *
-      (1 + (currentSkinObj.coinBonus || 0)) *
+      skinMult *
       currentPoleObj.coinMult *
       permCoinMult *
       vipCityMult
     ).toFixed(2)
+  );
+  const totalLpMultiplier = Number(
+    (skinMult * currentPoleObj.scoreMult * permLpMult * vipCityMult).toFixed(2)
   );
 
   useEffect(() => {
@@ -450,10 +480,11 @@ export default function App() {
     (preserveProgress = false) => {
       soundEngine.init();
       const currentCfg = getLevelConfig(level, activeVipCity);
+      const liveSkinObj = resolveSkinObject(equippedSkinRef.current);
       const eng = engineRef.current;
 
       eng.cfg = currentCfg;
-      eng.skinObj = currentSkinObj;
+      eng.skinObj = liveSkinObj;
       eng.poleObj = currentPoleObj;
       eng.propObj = currentPropObj;
       eng.gear = { ...gearLevels };
@@ -469,7 +500,7 @@ export default function App() {
         eng.revivedOnce = false;
         eng.floatingPopups = [];
         const shieldFromPole = currentPoleObj.autoSaveFall ? 1 : 0;
-        const shieldFromSkin = currentSkinObj.freeShields || 0;
+        const shieldFromSkin = liveSkinObj.freeShields || 0;
         eng.freeFallShieldsRemaining = shieldFromPole + shieldFromSkin;
       }
 
@@ -518,15 +549,7 @@ export default function App() {
         floatingPopups: [],
       });
     },
-    [
-      level,
-      activeVipCity,
-      currentSkinObj,
-      currentPoleObj,
-      currentPropObj,
-      gearLevels,
-      createBallsForConfig,
-    ]
+    [level, activeVipCity, currentPoleObj, currentPropObj, gearLevels, createBallsForConfig]
   );
 
   const startPlay = () => {
@@ -555,12 +578,16 @@ export default function App() {
       const eng = engineRef.current;
       if (!eng.running || eng.fallSequence.active) return;
 
+      const liveSkin = resolveSkinObject(equippedSkinRef.current);
       const gloveBonus = (eng.gear?.gloves || 0) * 0.015;
       const poleCatchBonus = eng.poleObj?.catchRadiusBonus || 0;
-      const skinCatchBonus = eng.skinObj?.catchWindowBonus || 0;
+      const skinCatchBonus = liveSkin?.catchWindowBonus || 0;
       const catchThreshold = Math.max(
         0.5,
-        0.74 - (eng.cfg?.catchWindow || 0.24) - gloveBonus - (poleCatchBonus + skinCatchBonus) * 0.35
+        0.74 -
+          (eng.cfg?.catchWindow || 0.24) -
+          gloveBonus -
+          (poleCatchBonus + skinCatchBonus) * 0.35
       );
 
       let caughtBall = null;
@@ -608,7 +635,6 @@ export default function App() {
         const frenzyBonus = eng.frenzyActive ? 2 : 1;
         eng.score += Math.round((28 + eng.combo * 9) * totalScoreMultiplier * frenzyBonus);
 
-        // Retroceso lateral al atrapar (anulado si equipa Barra Gravitatoria Imperial)
         if (!eng.poleObj?.noCatchRecoil) {
           const catchRecoil = eng.cfg?.catchRecoilImpulse ?? 0.05;
           eng.angularVel += (hand === 'left' ? -1 : 1) * catchRecoil;
@@ -627,7 +653,7 @@ export default function App() {
           });
         }
       } else {
-        eng.angularVel += (hand === 'left' ? -0.16 : 0.16);
+        eng.angularVel += hand === 'left' ? -0.16 : 0.16;
         eng.combo = 0;
         eng.frenzyActive = false;
         soundEngine.playMissAlert();
@@ -675,16 +701,10 @@ export default function App() {
     };
     const onKeyUp = (e) => {
       const eng = engineRef.current;
-      if (
-        (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') &&
-        eng.controlInput < 0
-      ) {
+      if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && eng.controlInput < 0) {
         eng.controlInput = 0;
       }
-      if (
-        (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') &&
-        eng.controlInput > 0
-      ) {
+      if ((e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') && eng.controlInput > 0) {
         eng.controlInput = 0;
       }
     };
@@ -729,20 +749,22 @@ export default function App() {
   }, []);
 
   // ============================================================================
-  // MAIN GAME LOOP (PHYSICS + THREE.JS RENDER)
+  // MAIN GAME LOOP (PHYSICS + THREE.JS RENDER CON `equippedSkinRef.current`)
   // ============================================================================
   useEffect(() => {
     const eng = engineRef.current;
+    const initialSkinObj = resolveSkinObject(equippedSkinRef.current);
+
     if (!eng.cfg) {
       eng.cfg = cfg;
-      eng.skinObj = currentSkinObj;
+      eng.skinObj = initialSkinObj;
       eng.poleObj = currentPoleObj;
       eng.propObj = currentPropObj;
       eng.gear = { ...gearLevels };
       eng.targetDistance = cfg.totalDistance;
       eng.balls = createBallsForConfig(cfg, currentPropObj.color);
     } else {
-      eng.skinObj = currentSkinObj;
+      eng.skinObj = initialSkinObj;
       eng.poleObj = currentPoleObj;
       eng.propObj = currentPropObj;
       eng.gear = { ...gearLevels };
@@ -755,6 +777,11 @@ export default function App() {
     const tick = (now) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - (eng.lastTimestamp || now)) / 1000));
       eng.lastTimestamp = now;
+
+      // PASO 1: Leer SIEMPRE `equippedSkinRef.current` en tiempo real en cada frame
+      const liveSkinId = equippedSkinRef.current;
+      const liveSkinObj = resolveSkinObject(liveSkinId);
+      eng.skinObj = liveSkinObj;
 
       if (eng.floatingPopups.length > 0) {
         for (let i = eng.floatingPopups.length - 1; i >= 0; i--) {
@@ -836,18 +863,18 @@ export default function App() {
             }
           }
         } else {
-          // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto
+          // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto en vivo
           const armoryPoleBonus = Math.min(0.45, (eng.gear.pole || 0) * 0.048);
           const poleGravityRed = eng.poleObj?.gravityReduction || 0;
           const totalGravityFactor = Math.max(0.22, (1 - armoryPoleBonus) * (1 - poleGravityRed));
 
           const armoryBootBonus = Math.min(0.48, (eng.gear.boots || 0) * 0.052);
-          const skinWindRed = eng.skinObj?.windReduction || 0;
+          const skinWindRed = liveSkinObj.windReduction || 0;
           const totalWindFactor = Math.max(0.2, (1 - armoryBootBonus) * (1 - skinWindRed));
 
           const totalStepDampFactor = Math.max(
             0.25,
-            1 - Math.min(0.75, (eng.poleObj?.stepDamp || 0) + (eng.skinObj?.stepDampBonus || 0))
+            1 - Math.min(0.75, (eng.poleObj?.stepDamp || 0) + (liveSkinObj.stepDampBonus || 0))
           );
 
           // 2. Viento y Ráfagas
@@ -880,7 +907,7 @@ export default function App() {
             if (eng.hookTimer <= 0) eng.hookActive = false;
           }
 
-          // 3. Avance e impacto de pisada amortiguado por Vara + Aspecto
+          // 3. Avance e impacto de pisada
           const prevWalkCycle = eng.walkCycle;
           const walkCycleRate = 3.2 * lCfg.walkSpeed;
           eng.walkCycle += dt * walkCycleRate;
@@ -930,7 +957,9 @@ export default function App() {
             soundEngine.playNearMiss();
             pushFloatingPopup(
               eng,
-              lang === 'es' ? `⚡ ¡SALVADA AL LÍMITE! +${nearBonus}` : `⚡ NEAR-MISS SAVE! +${nearBonus}`,
+              lang === 'es'
+                ? `⚡ ¡SALVADA AL LÍMITE! +${nearBonus}`
+                : `⚡ NEAR-MISS SAVE! +${nearBonus}`,
               '#38bdf8',
               lang === 'es' ? 'RECUPERACIÓN EXTREMA' : 'EXTREME RECOVERY'
             );
@@ -950,7 +979,7 @@ export default function App() {
           const alertHands = { left: false, right: false };
           const gloveBonus = (eng.gear?.gloves || 0) * 0.015;
           const poleCatchBonus = eng.poleObj?.catchRadiusBonus || 0;
-          const skinCatchBonus = eng.skinObj?.catchWindowBonus || 0;
+          const skinCatchBonus = liveSkinObj.catchWindowBonus || 0;
           const catchThreshold = Math.max(
             0.5,
             0.74 - lCfg.catchWindow - gloveBonus - (poleCatchBonus + skinCatchBonus) * 0.35
@@ -973,7 +1002,7 @@ export default function App() {
               eng.combo = 0;
               eng.frenzyActive = false;
               const dropPenalty = 0.24 + (lCfg.speedPhase || 0) * 0.04;
-              eng.angularVel += (b.targetHand === 'left' ? -dropPenalty : dropPenalty);
+              eng.angularVel += b.targetHand === 'left' ? -dropPenalty : dropPenalty;
               soundEngine.playMissAlert();
               pushFloatingPopup(
                 eng,
@@ -996,7 +1025,7 @@ export default function App() {
             }
           }
 
-          // 9. Chequeo de Caída Crítica (Escudo Anti-Caída Imperial/Leyenda -> Gancho -> Caída al Vacío)
+          // 9. Chequeo de Caída Crítica
           if (Math.abs(eng.angle) >= CRITICAL_ANGLE_RAD) {
             if (eng.freeFallShieldsRemaining > 0) {
               eng.freeFallShieldsRemaining -= 1;
@@ -1038,7 +1067,7 @@ export default function App() {
               );
               const finalLp = Math.max(
                 10,
-                Math.floor((eng.distance * 0.8 + eng.maxCombo * 4) * permLpMult * vipCityMult)
+                Math.floor((eng.distance * 0.8 + eng.maxCombo * 4) * totalLpMultiplier)
               );
 
               eng.fallSequence.active = true;
@@ -1055,7 +1084,7 @@ export default function App() {
               soundEngine.playFallScream();
             }
           } else if (eng.distance >= eng.targetDistance) {
-            // 10. Victoria al cruzar la azotea
+            // 10. Victoria al cruzar la azotea (multiplicando Puntos, Monedas y LP por el Aspecto)
             eng.running = false;
             soundEngine.updateWind(0);
             soundEngine.playVictory();
@@ -1064,9 +1093,10 @@ export default function App() {
               (125 + level * 26 + eng.maxCombo * 12) * totalCoinMultiplier
             );
             const finalLp = Math.floor(
-              (95 + level * 16 + eng.maxCombo * 9) * permLpMult * vipCityMult
+              (95 + level * 16 + eng.maxCombo * 9) * totalLpMultiplier
             );
-            const finalGems = (activeVipCity ? activeVipCity.gemBonus : 0) + (level % 5 === 0 ? 12 : 4);
+            const finalGems =
+              (activeVipCity ? activeVipCity.gemBonus : 0) + (level % 5 === 0 ? 12 : 4);
 
             setRunResult({
               coinsEarned: finalCoins,
@@ -1126,7 +1156,14 @@ export default function App() {
       }
 
       if (threeWorldRef.current) {
-        updateAndRenderThreeScene(threeWorldRef.current, eng, now * 0.001, gameState);
+        updateAndRenderThreeScene(
+          threeWorldRef.current,
+          eng,
+          now * 0.001,
+          gameState,
+          equippedSkinRef.current,
+          activeTabRef.current
+        );
       }
 
       animFrameRef.current = requestAnimationFrame(tick);
@@ -1139,14 +1176,12 @@ export default function App() {
   }, [
     gameState,
     cfg,
-    currentSkinObj,
     currentPoleObj,
     currentPropObj,
     gearLevels,
     totalScoreMultiplier,
     totalCoinMultiplier,
-    permLpMult,
-    vipCityMult,
+    totalLpMultiplier,
     activeVipCity,
     level,
     lang,
@@ -1223,7 +1258,9 @@ export default function App() {
     setTimeout(() => {
       const eng = engineRef.current;
       const nextCfg = getLevelConfig(nextLvl, activeVipCity);
+      const liveSkinObj = resolveSkinObject(equippedSkinRef.current);
       eng.cfg = nextCfg;
+      eng.skinObj = liveSkinObj;
       eng.targetDistance = nextCfg.totalDistance;
       eng.distance = 0;
       eng.score = 0;
@@ -1236,7 +1273,7 @@ export default function App() {
       eng.hookActive = false;
       eng.revivedOnce = false;
       const shieldFromPole = currentPoleObj.autoSaveFall ? 1 : 0;
-      const shieldFromSkin = currentSkinObj.freeShields || 0;
+      const shieldFromSkin = liveSkinObj.freeShields || 0;
       eng.freeFallShieldsRemaining = shieldFromPole + shieldFromSkin;
       eng.fallSequence.active = false;
       eng.fallSequence.mode = null;
@@ -1248,7 +1285,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // BLOQUE 1: UPGRADE DE ARMERÍA (CURVA EXPONENCIAL NV 1-5 + CORTE PRO NV 6-10)
+  // UPGRADE DE ARMERÍA (CURVA EXPONENCIAL NV 1-5 + CORTE PRO NV 6-10)
   // ============================================================================
   const handleUpgradeGear = (gearItem) => {
     const curLvl = gearLevels[gearItem.id] || 0;
@@ -1256,7 +1293,6 @@ export default function App() {
     if (costInfo.isMax) return;
 
     if (!costInfo.isProTier) {
-      // Niveles 1 a 5 (monedas del juego: 850 -> 2083 -> 5102 -> 12500 -> 30626)
       if (coins < costInfo.coinCost) {
         showToast(
           lang === 'es'
@@ -1268,26 +1304,19 @@ export default function App() {
       setCoins((c) => c - costInfo.coinCost);
       setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
       soundEngine.playCatch(curLvl + 2, false);
-      showToast(
-        `${gearItem.icon} ${gearItem.name[lang]} Nv.${curLvl + 1}/10!`
-      );
+      showToast(`${gearItem.icon} ${gearItem.name[lang]} Nv.${curLvl + 1}/10!`);
     } else {
-      // Niveles 6 a 10: Tramo Élite / Dinero Real (Gemas o Pase VIP Pro)
       if (vipPassActive) {
         setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
         soundEngine.playVictory();
-        showToast(
-          `👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10 (Pase VIP)!`
-        );
+        showToast(`👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10 (Pase VIP)!`);
         return;
       }
       if (gems >= costInfo.gemCost) {
         setGems((g) => g - costInfo.gemCost);
         setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
         soundEngine.playVictory();
-        showToast(
-          `👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10!`
-        );
+        showToast(`👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10!`);
       } else {
         setActiveTab('store');
         showToast(
@@ -1300,7 +1329,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // BLOQUE 2: COMPRA / EQUIPAMIENTO DE VARAS DE EQUILIBRIO 3D
+  // COMPRA / EQUIPAMIENTO DE VARAS DE EQUILIBRIO 3D
   // ============================================================================
   const handleSelectOrBuyPole = (pole) => {
     if (unlockedPoles.includes(pole.id) || (pole.isVipOnly && vipPassActive)) {
@@ -1346,26 +1375,37 @@ export default function App() {
   };
 
   // ============================================================================
-  // BLOQUE 3: COMPRA DE ASPECTOS CON BENEFICIOS Y MULTIPLICADORES PERMANENTES
+  // COMPRA / EQUIPAMIENTO DE ASPECTOS CON ACTUALIZACIÓN INSTANTÁNEA EN `equippedSkinRef`
   // ============================================================================
   const handleSelectOrBuySkin = (skin) => {
-    if (unlockedSkins.includes(skin.id) || (skin.isVipOnly && vipPassActive)) {
-      if (!unlockedSkins.includes(skin.id)) {
-        setUnlockedSkins((prev) => [...prev, skin.id]);
+    const skinKey = resolveSkinKey(skin.id);
+    const isOwned =
+      unlockedSkins.includes(skinKey) ||
+      unlockedSkins.includes(skin.legacyId) ||
+      (skin.isVipOnly && vipPassActive);
+
+    if (isOwned) {
+      if (!unlockedSkins.includes(skinKey)) {
+        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
       }
-      setEquippedSkin(skin.id);
-      soundEngine.playCatch(3, false);
-      showToast(`${skin.icon} ${skin.name[lang]} ${t.equipped}`);
+      // Sincronización inmediata del Ref + Estado para cambio visual en el próximo frame
+      equippedSkinRef.current = skinKey;
+      engineRef.current.skinObj = skin;
+      setEquippedSkin(skinKey);
+      soundEngine.playCatch(5, true);
+      showToast(`${skin.icon} ${skin.name[lang]} — ${t.equipped}!`);
       return;
     }
 
     if (skin.currency === 'coins') {
       if (coins >= skin.cost) {
         setCoins((c) => c - skin.cost);
-        setUnlockedSkins((prev) => [...prev, skin.id]);
-        setEquippedSkin(skin.id);
+        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+        equippedSkinRef.current = skinKey;
+        engineRef.current.skinObj = skin;
+        setEquippedSkin(skinKey);
         soundEngine.playVictory();
-        showToast(`${skin.icon} ${skin.name[lang]}!`);
+        showToast(`${skin.icon} ${skin.name[lang]} ${t.equipped}!`);
       } else {
         showToast(
           lang === 'es'
@@ -1376,10 +1416,12 @@ export default function App() {
     } else {
       if (gems >= skin.gemCost) {
         setGems((g) => g - skin.gemCost);
-        setUnlockedSkins((prev) => [...prev, skin.id]);
-        setEquippedSkin(skin.id);
+        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+        equippedSkinRef.current = skinKey;
+        engineRef.current.skinObj = skin;
+        setEquippedSkin(skinKey);
         soundEngine.playVictory();
-        showToast(`👑 ${skin.name[lang]} Desbloqueado!`);
+        showToast(`👑 ${skin.name[lang]} Desbloqueado y Equipado!`);
       } else {
         setActiveTab('store');
         showToast(
@@ -1466,9 +1508,6 @@ export default function App() {
     }
   };
 
-  // ============================================================================
-  // BLOQUE 4: CIUDADES EXCLUSIVAS VIP Y SELECTOR DE CAMPAÑA
-  // ============================================================================
   const handleSelectCity = (cityIdx) => {
     const highestUnlocked = Math.max(maxUnlockedCity, Math.min(19, Math.floor((level - 1) / 5)));
     if (cityIdx > highestUnlocked) return;
@@ -1520,12 +1559,13 @@ export default function App() {
     setCoins((c) => c + bundle.coins);
     if (bundle.isVipPassBundle) {
       setVipPassActive(true);
-      setUnlockedPoles((prev) =>
-        Array.from(new Set([...prev, 'pole_imperial', 'pole_quantum']))
-      );
+      setUnlockedPoles((prev) => Array.from(new Set([...prev, 'pole_imperial', 'pole_quantum'])));
       setEquippedPole('pole_imperial');
-      setUnlockedSkins((prev) => Array.from(new Set([...prev, 'skin_5', 'skin_4'])));
-      setEquippedSkin('skin_5');
+      setUnlockedSkins((prev) =>
+        Array.from(new Set([...prev, 'shinobi', 'leyenda_dorada']))
+      );
+      equippedSkinRef.current = 'leyenda_dorada';
+      setEquippedSkin('leyenda_dorada');
       setOwnedMultipliers((prev) => Array.from(new Set([...prev, 'mult_x3_pro'])));
       setUnlockedVipCities(VIP_CITIES.map((vc) => vc.id));
     }
@@ -1553,9 +1593,6 @@ export default function App() {
     showToast(`🏆 +${tier.gemsReward} 💎 & +${tier.coinsReward} 🪙!`);
   };
 
-  // ============================================================================
-  // RANKING LIVE DATA
-  // ============================================================================
   const leaderboard =
     liveLeaderboard.length > 0
       ? liveLeaderboard
@@ -1590,7 +1627,7 @@ export default function App() {
   return (
     <div className="app-root">
       <div className="phone-frame">
-        {/* CONTENEDOR 3D WEBGL (THREE.JS VECTOR ENGINE + MONUMENTOS 3D) */}
+        {/* CONTENEDOR 3D WEBGL (THREE.JS VECTOR ENGINE + ASPECTOS EN VIVO + MONUMENTOS 3D) */}
         <div
           ref={mountRef}
           className="game-canvas"
@@ -1636,7 +1673,9 @@ export default function App() {
                   autoFocus
                   className={`onboarding-input ${onboardingError ? 'input-error-shake' : ''}`}
                   placeholder={
-                    lang === 'es' ? 'Tu Nombre o Apodo (Ej: Maury_AR)' : 'Your Nickname (e.g. Maury_AR)'
+                    lang === 'es'
+                      ? 'Tu Nombre o Apodo (Ej: Maury_AR)'
+                      : 'Your Nickname (e.g. Maury_AR)'
                   }
                   value={onboardingNameInput}
                   onChange={(e) => {
@@ -1727,7 +1766,6 @@ export default function App() {
                 className="items-scroll-list"
                 style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}
               >
-                {/* BLOQUE 4: CIUDADES EXCLUSIVAS VIP */}
                 <div
                   style={{
                     fontSize: 11,
@@ -1786,7 +1824,6 @@ export default function App() {
                   );
                 })}
 
-                {/* 20 CIUDADES DE CAMPAÑA CON MONUMENTOS 3D */}
                 <div
                   style={{
                     fontSize: 11,
@@ -1872,7 +1909,7 @@ export default function App() {
                 <div className="vector-city-tag">
                   <span>
                     {cfg.city.flag} {cfg.city.name[lang].toUpperCase()} •{' '}
-                    {activeVipCity ? '👑 VIP' : `${t.level} ${level}`}
+                    {activeVipCity ? '👑 VIP' : `${t.level} ${level}`} • x{totalScoreMultiplier}
                   </span>
                   <span className="vector-meters-left">
                     {hudData.metersRemaining}m / {hudData.totalMeters}m
@@ -2116,8 +2153,7 @@ export default function App() {
                       </div>
                       <div className="city-title-text">{cfg.city.name[lang]}</div>
                       <div className="city-level-sub">
-                        {t.level} {level} • {currentPoleObj.icon}{' '}
-                        {currentPoleObj.name[lang]}
+                        {t.level} {level} • {currentSkinObj.icon} {currentSkinObj.name[lang]}
                       </div>
                     </div>
                     <div className="multiplier-chip">x{totalScoreMultiplier}</div>
@@ -2130,9 +2166,11 @@ export default function App() {
                     </div>
                     <div className="stat-box">
                       <span className="stat-lbl">
-                        {lang === 'es' ? 'MULTI MONEDAS' : 'COIN MULTI'}
+                        {lang === 'es' ? 'MULTI TOTAL ACTIVO' : 'ACTIVE TOTAL MULTI'}
                       </span>
-                      <span className="stat-val gold">x{totalCoinMultiplier} 🪙</span>
+                      <span className="stat-val gold">
+                        x{totalScoreMultiplier} PTS / x{totalCoinMultiplier} 🪙
+                      </span>
                     </div>
                   </div>
 
@@ -2157,7 +2195,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* TAB 2: ARMERÍA (BLOQUE 1: NV 1-10 + BLOQUE 2: VARAS 3D + BLOQUE 3: MULTIPLICADORES) */}
+              {/* TAB 2: ARMERÍA */}
               {activeTab === 'armory' && (
                 <div className="panel-card">
                   <h2 className="panel-heading">⚙️ {t.armoryTitle}</h2>
@@ -2188,7 +2226,6 @@ export default function App() {
                   </div>
 
                   <div className="items-scroll-list">
-                    {/* SUB-TAB 1: MEJORAS EXPONENCIALES NV 1-5 (MONEDAS) Y NV 6-10 (PRO GEMAS / VIP) */}
                     {armorySubTab === 'upgrades' && (
                       <>
                         {GEAR_ITEMS.map((gItem) => {
@@ -2290,7 +2327,6 @@ export default function App() {
                       </>
                     )}
 
-                    {/* SUB-TAB 2: BLOQUE 2 - 5 VARAS DE EQUILIBRIO 3D */}
                     {armorySubTab === 'poles' &&
                       BALANCE_POLES.map((pole) => {
                         const isOwned =
@@ -2340,7 +2376,6 @@ export default function App() {
                         );
                       })}
 
-                    {/* SUB-TAB 3: BLOQUE 3.2 - MULTIPLICADORES PERMANENTES */}
                     {armorySubTab === 'multipliers' &&
                       PERMANENT_MULTIPLIERS.map((mItem) => {
                         const isOwned =
@@ -2390,18 +2425,47 @@ export default function App() {
                 </div>
               )}
 
-              {/* TAB 3: ASPECTOS CON BENEFICIOS ACTIVOS + VARAS DE EQUILIBRIO */}
+              {/* TAB 3: ASPECTOS CON VISTA PREVIA 3D EN VIVO + BADGE DE PALETA DE NEÓN */}
               {activeTab === 'skins' && (
-                <div className="panel-card">
+                <div className="panel-card skins-panel-card">
                   <h2 className="panel-heading">🎭 {t.skinsTitle}</h2>
-                  <p className="panel-sub">{t.skinsSubtitle}</p>
+
+                  {/* VENTANA DE VISTA PREVIA 3D EN VIVO DEL ACRÓBATA */}
+                  <div className="skin-3d-live-window">
+                    <div className="skin-live-top-tag">
+                      <span>
+                        🎥 {lang === 'es' ? 'VISTA 3D EN TIEMPO REAL' : 'LIVE 3D PREVIEW'}
+                      </span>
+                      <span className="skin-live-mult-chip">
+                        {currentSkinObj.icon} {currentSkinVisual.multLabel} (TOTAL x{totalScoreMultiplier})
+                      </span>
+                    </div>
+                    <div className="skin-live-bottom-bar">
+                      <span>
+                        {currentSkinObj.name[lang]}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {(currentSkinVisual.paletteSwatches || []).map((hex, i) => (
+                          <span
+                            key={i}
+                            className="palette-swatch-dot"
+                            style={{ backgroundColor: hex }}
+                          />
+                        ))}
+                      </span>
+                    </div>
+                  </div>
 
                   <div className="items-scroll-list">
                     {SKINS.map((sk) => {
+                      const skinKey = resolveSkinKey(sk.id);
                       const isOwned =
-                        unlockedSkins.includes(sk.id) ||
+                        unlockedSkins.includes(skinKey) ||
+                        unlockedSkins.includes(sk.legacyId) ||
                         (sk.isVipOnly && vipPassActive);
-                      const isEquipped = equippedSkin === sk.id;
+                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey;
+                      const vis = sk.visual || SKIN_VISUALS[skinKey] || SKIN_VISUALS.urbano;
+
                       return (
                         <div
                           key={sk.id}
@@ -2413,12 +2477,28 @@ export default function App() {
                             className="item-icon-box"
                             style={{
                               background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
+                              border: `1.5px solid ${sk.trimColor}`,
                             }}
                           >
                             {sk.icon}
                           </div>
                           <div className="item-info">
                             <div className="item-title">{sk.name[lang]}</div>
+
+                            {/* PASO 3: Badge de color con la vista previa de su paleta de neón */}
+                            <div className="skin-palette-preview-badge">
+                              {(vis.paletteSwatches || []).map((swatchHex, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="palette-swatch-dot"
+                                  style={{ backgroundColor: swatchHex }}
+                                />
+                              ))}
+                              <span className="palette-label-text">
+                                {vis.paletteLabel?.[lang] || vis.multLabel} • {vis.multLabel}
+                              </span>
+                            </div>
+
                             <div
                               className={`benefit-pill-tag ${sk.isPro ? 'pro' : ''}`}
                             >
