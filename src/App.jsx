@@ -4,6 +4,7 @@ import {
   CITIES,
   VIP_CITIES,
   SKINS,
+  SKINS_CATALOG,
   SKIN_VISUALS,
   resolveSkinKey,
   resolveSkinObject,
@@ -28,6 +29,7 @@ import {
 import {
   CRITICAL_ANGLE_RAD,
   buildThreeWorld,
+  applySkinToAcrobat,
   updateAndRenderThreeScene,
 } from './threeEngine';
 
@@ -127,24 +129,58 @@ export default function App() {
   });
   const [onboardingError, setOnboardingError] = useState(false);
 
-  // Estados de Economía Pro, Pase VIP, Aspectos (`equippedSkin`), Varas 3D, Multiplicadores y Ciudades VIP
+  // Estados de Economía Pro, Pase VIP, Aspectos (`equippedSkin` y `ownedSkins`), Varas 3D, Multiplicadores y Ciudades VIP
   const [vipPassActive, setVipPassActive] = useState(saved?.vipPassActive || false);
   const [unlockedSkins, setUnlockedSkins] = useState(() => {
-    const rawList = saved?.unlockedSkins || ['urbano'];
+    let storedOwned = [];
+    try {
+      const rawOwned = localStorage.getItem('nma_owned_skins');
+      if (rawOwned) storedOwned = JSON.parse(rawOwned);
+    } catch {
+      // ignore
+    }
+    const rawList = [
+      ...(saved?.ownedSkins || []),
+      ...(saved?.unlockedSkins || []),
+      ...(Array.isArray(storedOwned) ? storedOwned : []),
+      'urbano',
+    ];
     const normalized = rawList.map((id) => resolveSkinKey(id));
     if (!normalized.includes('urbano')) normalized.unshift('urbano');
     return Array.from(new Set(normalized));
   });
-  const [equippedSkin, setEquippedSkin] = useState(() =>
-    resolveSkinKey(saved?.equippedSkin || 'urbano')
-  );
-  const [previewSkin, setPreviewSkin] = useState(null);
+  const ownedSkins = unlockedSkins;
+  const setOwnedSkins = setUnlockedSkins;
 
-  // PASO 1: Referencia sincronizada en tiempo real para `equippedSkin` en el motor 3D
+  const [equippedSkin, setEquippedSkin] = useState(() => {
+    try {
+      const savedEquipped = localStorage.getItem('nma_equipped_skin');
+      if (savedEquipped) return resolveSkinKey(savedEquipped);
+    } catch {
+      // ignore
+    }
+    return resolveSkinKey(saved?.equippedSkin || 'urbano');
+  });
+  const [previewSkin, setPreviewSkin] = useState(null);
+  const [proCheckoutSkin, setProCheckoutSkin] = useState(null);
+
+  // BLOQUE 2.3: Sincronización inmediata en tiempo real (`equippedSkinRef.current` + `applySkinToAcrobat`)
   const equippedSkinRef = useRef(equippedSkin);
   useEffect(() => {
-    equippedSkinRef.current = previewSkin || equippedSkin;
-  }, [equippedSkin, previewSkin]);
+    equippedSkinRef.current = equippedSkin;
+    applySkinToAcrobat(equippedSkin);
+    try {
+      localStorage.setItem('nma_equipped_skin', equippedSkin);
+    } catch {
+      // ignore
+    }
+  }, [equippedSkin]);
+
+  useEffect(() => {
+    const activeId = previewSkin || equippedSkin;
+    equippedSkinRef.current = activeId;
+    applySkinToAcrobat(activeId);
+  }, [previewSkin, equippedSkin]);
 
   const [unlockedPoles, setUnlockedPoles] = useState(saved?.unlockedPoles || ['pole_basic']);
   const [equippedPole, setEquippedPole] = useState(saved?.equippedPole || 'pole_basic');
@@ -265,6 +301,8 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('nma_economy_v2_migrated', 'true');
+      localStorage.setItem('nma_owned_skins', JSON.stringify(unlockedSkins));
+      localStorage.setItem('nma_equipped_skin', equippedSkin);
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
@@ -278,6 +316,7 @@ export default function App() {
           playerName: playerName || 'Equilibrista',
           playerCountry,
           vipPassActive,
+          ownedSkins: unlockedSkins,
           unlockedSkins,
           equippedSkin,
           unlockedPoles,
@@ -734,6 +773,7 @@ export default function App() {
 
     const world = buildThreeWorld(container);
     threeWorldRef.current = world;
+    applySkinToAcrobat(equippedSkinRef.current, world, false);
 
     const handleResize = () => {
       if (!container || !threeWorldRef.current) return;
@@ -872,18 +912,19 @@ export default function App() {
             }
           }
         } else {
-          // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto en vivo
+          // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto en vivo (`SKINS_CATALOG`)
           const armoryPoleBonus = Math.min(0.45, (eng.gear.pole || 0) * 0.048);
           const poleGravityRed = eng.poleObj?.gravityReduction || 0;
-          const skinGravityRed = liveSkinObj.gravityReduction || 0;
+          const skinGravityMod =
+            liveSkinObj.gravityMod ?? 1 - (liveSkinObj.gravityReduction || 0);
           const totalGravityFactor = Math.max(
             0.18,
-            (1 - armoryPoleBonus) * (1 - poleGravityRed) * (1 - skinGravityRed)
+            (1 - armoryPoleBonus) * (1 - poleGravityRed) * skinGravityMod
           );
 
           const armoryBootBonus = Math.min(0.48, (eng.gear.boots || 0) * 0.052);
-          const skinWindRed = liveSkinObj.windReduction || 0;
-          const totalWindFactor = Math.max(0.2, (1 - armoryBootBonus) * (1 - skinWindRed));
+          const skinWindResist = liveSkinObj.windResist ?? liveSkinObj.windReduction ?? 0;
+          const totalWindFactor = Math.max(0.2, (1 - armoryBootBonus) * (1 - skinWindResist));
 
           const totalStepDampFactor = Math.max(
             0.25,
@@ -1390,7 +1431,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // COMPRA / EQUIPAMIENTO / VISTA PREVIA DE ASPECTOS CON ACTUALIZACIÓN INSTANTÁNEA EN `equippedSkinRef`
+  // BLOQUE 3: FLUJO DE COMPRA, AUTO-EQUIPADO INMEDIATO Y CHECKOUT DE PAGA (`applySkinToAcrobat`)
   // ============================================================================
   const handlePreviewSkin = (skin) => {
     const skinKey = resolveSkinKey(skin.id);
@@ -1398,16 +1439,46 @@ export default function App() {
       setPreviewSkin(null);
       equippedSkinRef.current = equippedSkin;
       engineRef.current.skinObj = resolveSkinObject(equippedSkin);
+      applySkinToAcrobat(equippedSkin);
       return;
     }
     equippedSkinRef.current = skinKey;
     engineRef.current.skinObj = skin;
     setPreviewSkin(skinKey);
+    applySkinToAcrobat(skinKey);
     soundEngine.playCatch(3, false);
     showToast(
       lang === 'es'
-        ? `👁️ Vista Previa 3D: ${skin.icon} ${skin.name.es}`
-        : `👁️ 3D Live Preview: ${skin.icon} ${skin.name.en}`
+        ? `👁️ Probando en 3D: ${skin.icon} ${skin.name.es}`
+        : `👁️ Trying in 3D: ${skin.icon} ${skin.name.en}`
+    );
+  };
+
+  const handleConfirmProSkinPurchase = (skin, useGems = false) => {
+    if (!skin) return;
+    const skinKey = resolveSkinKey(skin.id);
+    if (useGems && skin.gemCost && gems >= skin.gemCost) {
+      setGems((g) => g - skin.gemCost);
+    }
+    const nextOwned = Array.from(new Set([...unlockedSkins, skinKey]));
+    setOwnedSkins(nextOwned);
+    try {
+      localStorage.setItem('nma_owned_skins', JSON.stringify(nextOwned));
+      localStorage.setItem('nma_equipped_skin', skinKey);
+    } catch {
+      // ignore
+    }
+    setPreviewSkin(null);
+    setProCheckoutSkin(null);
+    equippedSkinRef.current = skinKey;
+    engineRef.current.skinObj = skin;
+    setEquippedSkin(skinKey);
+    applySkinToAcrobat(skinKey);
+    soundEngine.playVictory();
+    showToast(
+      lang === 'es'
+        ? `👑 ¡${skin.name.es} DESBLOQUEADO Y EQUIPADO EN 3D!`
+        : `👑 ${skin.name.en} UNLOCKED & EQUIPPED IN 3D!`
     );
   };
 
@@ -1420,60 +1491,63 @@ export default function App() {
 
     if (isOwned) {
       if (!unlockedSkins.includes(skinKey)) {
-        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+        const nextOwned = Array.from(new Set([...unlockedSkins, skinKey]));
+        setOwnedSkins(nextOwned);
+        try {
+          localStorage.setItem('nma_owned_skins', JSON.stringify(nextOwned));
+        } catch {
+          // ignore
+        }
       }
-      // Sincronización inmediata del Ref + Estado para cambio visual en el mismo milisegundo
+      // Sincronización inmediata del Ref + Estado + Modelo 3D en el acto
       setPreviewSkin(null);
       equippedSkinRef.current = skinKey;
       engineRef.current.skinObj = skin;
       setEquippedSkin(skinKey);
+      applySkinToAcrobat(skinKey);
       soundEngine.playCatch(5, true);
       showToast(`${skin.icon} ${skin.name[lang]} — ${t.equipped}!`);
       return;
     }
 
+    const coinPrice = skin.price ?? skin.cost ?? 0;
     if (skin.currency === 'coins') {
-      if (coins >= skin.cost) {
-        setCoins((c) => c - skin.cost);
-        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+      if (coins >= coinPrice) {
+        setCoins((c) => c - coinPrice);
+        const nextOwned = Array.from(new Set([...unlockedSkins, skinKey]));
+        setOwnedSkins(nextOwned);
+        try {
+          localStorage.setItem('nma_owned_skins', JSON.stringify(nextOwned));
+          localStorage.setItem('nma_equipped_skin', skinKey);
+        } catch {
+          // ignore
+        }
         setPreviewSkin(null);
         equippedSkinRef.current = skinKey;
         engineRef.current.skinObj = skin;
         setEquippedSkin(skinKey);
+        applySkinToAcrobat(skinKey);
         soundEngine.playVictory();
         showToast(`${skin.icon} ${skin.name[lang]} ${t.equipped}!`);
       } else {
-        // Aun sin monedas, activa vista previa 3D inmediata para que el jugador vea la skin en pantalla
+        // Aun sin monedas suficientes, activa vista previa 3D inmediata
         equippedSkinRef.current = skinKey;
         engineRef.current.skinObj = skin;
         setPreviewSkin(skinKey);
+        applySkinToAcrobat(skinKey);
         showToast(
           lang === 'es'
-            ? `🪙 Necesitás ${skin.cost.toLocaleString()} Monedas (Vista Previa 3D activa)`
-            : `🪙 Need ${skin.cost.toLocaleString()} Coins (3D Preview active)`
+            ? `🪙 Necesitás ${coinPrice.toLocaleString()} Monedas (Probando en 3D)`
+            : `🪙 Need ${coinPrice.toLocaleString()} Coins (Trying in 3D)`
         );
       }
     } else {
-      if (gems >= skin.gemCost) {
-        setGems((g) => g - skin.gemCost);
-        setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
-        setPreviewSkin(null);
-        equippedSkinRef.current = skinKey;
-        engineRef.current.skinObj = skin;
-        setEquippedSkin(skinKey);
-        soundEngine.playVictory();
-        showToast(`👑 ${skin.name[lang]} Desbloqueado y Equipado!`);
-      } else {
-        equippedSkinRef.current = skinKey;
-        engineRef.current.skinObj = skin;
-        setPreviewSkin(skinKey);
-        setActiveTab('store');
-        showToast(
-          lang === 'es'
-            ? `👑 Aspecto Pro (${skin.usdPrice || `${skin.gemCost} 💎`}): Disponible en Tienda VIP`
-            : `👑 Pro Skin (${skin.usdPrice || `${skin.gemCost} 💎`}): Available in VIP Store`
-        );
-      }
+      // BLOQUE 3.2: Abrir modal de Confirmación de Compra Pro / Pasarela VIP y activar vista previa 3D inmediata
+      equippedSkinRef.current = skinKey;
+      engineRef.current.skinObj = skin;
+      setPreviewSkin(skinKey);
+      applySkinToAcrobat(skinKey);
+      setProCheckoutSkin(skin);
     }
   };
 
@@ -2563,7 +2637,7 @@ export default function App() {
                             <div className="item-desc">{sk.desc[lang]}</div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
-                            {!isOwned && (
+                            {!isEquipped && (
                               <button
                                 type="button"
                                 className="item-action-btn equip"
@@ -2580,11 +2654,11 @@ export default function App() {
                               >
                                 {isPreviewing
                                   ? lang === 'es'
-                                    ? '👁️ VIENDO'
-                                    : '👁️ VIEWING'
+                                    ? '👁️ PROBANDO'
+                                    : '👁️ TRYING'
                                   : lang === 'es'
-                                  ? '👁️ VISTA PREVIA'
-                                  : '👁️ PREVIEW'}
+                                  ? '👁️ PROBAR'
+                                  : '👁️ TRY'}
                               </button>
                             )}
                             <button
@@ -2601,7 +2675,7 @@ export default function App() {
                                 ? t.equipped
                                 : isOwned
                                 ? t.equip
-                                : `🪙 ${sk.cost.toLocaleString()}`}
+                                : `🪙 ${(sk.price ?? sk.cost ?? 0).toLocaleString()}`}
                             </button>
                           </div>
                         </div>
@@ -2699,7 +2773,7 @@ export default function App() {
                               alignItems: 'flex-end',
                             }}
                           >
-                            {!isOwned && (
+                            {!isEquipped && (
                               <button
                                 type="button"
                                 className="item-action-btn equip"
@@ -2716,11 +2790,11 @@ export default function App() {
                               >
                                 {isPreviewing
                                   ? lang === 'es'
-                                    ? '👁️ VIENDO'
-                                    : '👁️ VIEWING'
+                                    ? '👁️ PROBANDO'
+                                    : '👁️ TRYING'
                                   : lang === 'es'
-                                  ? '👁️ VISTA PREVIA'
-                                  : '👁️ PREVIEW'}
+                                  ? '👁️ PROBAR'
+                                  : '👁️ TRY'}
                               </button>
                             )}
                             <button
@@ -2737,7 +2811,7 @@ export default function App() {
                                 ? t.equipped
                                 : isOwned
                                 ? t.equip
-                                : `👑 ${sk.usdPrice || `${sk.gemCost} 💎`}`}
+                                : `👑 ${sk.priceUSD || sk.usdPrice || `${sk.gemCost} 💎`}`}
                             </button>
                           </div>
                         </div>
@@ -3155,6 +3229,109 @@ export default function App() {
                 onClick={() => setGameState('menu')}
               >
                 🏠 {t.backToMenu}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* BLOQUE 3.2: MODAL DE CONFIRMACIÓN DE COMPRA PRO / PASARELA VIP */}
+        {proCheckoutSkin && (
+          <div className="modal-backdrop ad-layer">
+            <div
+              className="modal-card"
+              style={{
+                border: '1.5px solid rgba(251, 191, 36, 0.75)',
+                boxShadow: '0 0 36px rgba(245, 158, 11, 0.35)',
+                maxWidth: 365,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '2.35rem',
+                  marginBottom: 4,
+                  filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.7))',
+                }}
+              >
+                {proCheckoutSkin.icon}
+              </div>
+              <span
+                style={{
+                  display: 'inline-block',
+                  fontSize: '0.64rem',
+                  fontWeight: 900,
+                  padding: '3px 10px',
+                  borderRadius: 999,
+                  background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                  color: '#1e1b4b',
+                  letterSpacing: '0.06em',
+                  marginBottom: 8,
+                }}
+              >
+                {lang === 'es' ? '👑 PASARELA VIP • ASPECTO ÉLITE PRO' : '👑 VIP CHECKOUT • ELITE PRO SKIN'}
+              </span>
+              <h2 className="modal-title" style={{ fontSize: '1.15rem', marginBottom: 4 }}>
+                {proCheckoutSkin.name[lang]}
+              </h2>
+              <p className="modal-subtitle" style={{ fontSize: '0.78rem', marginBottom: 10 }}>
+                {proCheckoutSkin.desc[lang]}
+              </p>
+
+              <div className="rewards-summary-box" style={{ marginBottom: 12 }}>
+                <div className="reward-line gold">
+                  <span>{lang === 'es' ? 'Multiplicador Activo' : 'Active Multiplier'}</span>
+                  <strong>x{proCheckoutSkin.mult || proCheckoutSkin.bonusMult} LP & 🪙</strong>
+                </div>
+                <div className="reward-line cyan">
+                  <span>{lang === 'es' ? 'Resistencia al Viento' : 'Wind Resistance'}</span>
+                  <strong>-{Math.round((proCheckoutSkin.windResist || proCheckoutSkin.windReduction || 0) * 100)}%</strong>
+                </div>
+                <div className="reward-line cyan">
+                  <span>{lang === 'es' ? 'Estabilidad sobre el Cable' : 'Cable Stability'}</span>
+                  <strong>
+                    +{Math.round((1 - (proCheckoutSkin.gravityMod ?? 1)) * 100)}%
+                  </strong>
+                </div>
+                <div className="reward-line">
+                  <span>{lang === 'es' ? 'Ventana Imán Malabares' : 'Juggle Magnet Window'}</span>
+                  <strong>
+                    +{Math.round(((proCheckoutSkin.catchBonus || 1) - 1) * 100)}%
+                  </strong>
+                </div>
+                {(proCheckoutSkin.freeShields || 0) > 0 && (
+                  <div className="reward-line gold">
+                    <span>{lang === 'es' ? 'Escudo Anti-Caída Gratis' : 'Free Anti-Fall Shield'}</span>
+                    <strong>+{proCheckoutSkin.freeShields} / {lang === 'es' ? 'Nivel' : 'Level'} 🛡️</strong>
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="pause-action-btn ad-gold"
+                style={{ marginBottom: 8, fontWeight: 900 }}
+                onClick={() => handleConfirmProSkinPurchase(proCheckoutSkin, false)}
+              >
+                {lang === 'es'
+                  ? `✅ CONFIRMAR Y EQUIPAR (${proCheckoutSkin.priceUSD || proCheckoutSkin.usdPrice})`
+                  : `✅ CONFIRM & EQUIP (${proCheckoutSkin.priceUSD || proCheckoutSkin.usdPrice})`}
+              </button>
+
+              {proCheckoutSkin.gemCost && gems >= proCheckoutSkin.gemCost && (
+                <button
+                  className="pause-action-btn primary"
+                  style={{ marginBottom: 8 }}
+                  onClick={() => handleConfirmProSkinPurchase(proCheckoutSkin, true)}
+                >
+                  {lang === 'es'
+                    ? `💎 CANJEAR CON ${proCheckoutSkin.gemCost} GEMAS Y EQUIPAR`
+                    : `💎 REDEEM WITH ${proCheckoutSkin.gemCost} GEMS & EQUIP`}
+                </button>
+              )}
+
+              <button
+                className="pause-action-btn secondary"
+                onClick={() => setProCheckoutSkin(null)}
+              >
+                {lang === 'es' ? 'Seguir Probando en 3D' : 'Keep Trying in 3D'}
               </button>
             </div>
           </div>

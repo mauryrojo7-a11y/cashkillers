@@ -1,45 +1,10 @@
 import * as THREE from 'three';
-import { CITIES, resolveSkinVisual } from './gameData';
+import { CITIES, SKINS_CATALOG, resolveSkinKey, resolveSkinVisual } from './gameData';
 import { populateCityLandmark3D } from './landmarks3D';
 
 export const CRITICAL_ANGLE_RAD = 0.82; // ~47 degrees critical fall angle
 
-function createSkinPartShaderMaterial(baseHex = 0x1e293b, rimHex = 0x38bdf8, rimStrength = 1.05) {
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      uBaseColor: { value: new THREE.Color(baseHex) },
-      uRimColor: { value: new THREE.Color(rimHex) },
-      uRimPower: { value: 2.05 },
-      uRimStrength: { value: rimStrength },
-    },
-    vertexShader: `
-      varying vec3 vNormal;
-      varying vec3 vViewDir;
-      void main() {
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        vNormal = normalize(normalMatrix * normal);
-        vViewDir = normalize(-mvPosition.xyz);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 uBaseColor;
-      uniform vec3 uRimColor;
-      uniform float uRimPower;
-      uniform float uRimStrength;
-      varying vec3 vNormal;
-      varying vec3 vViewDir;
-      void main() {
-        float ndotv = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
-        float fresnel = pow(1.0 - ndotv, uRimPower);
-        float rim = smoothstep(0.18, 0.88, fresnel) * uRimStrength;
-        vec3 litBase = uBaseColor * (0.72 + 0.38 * ndotv);
-        vec3 finalCol = mix(litBase, uRimColor, clamp(rim, 0.0, 1.0));
-        gl_FragColor = vec4(finalCol, 1.0);
-      }
-    `,
-  });
-}
+let activeThreeCtxRef = null;
 
 function createBacklitHorizonTexture() {
   const c = document.createElement('canvas');
@@ -397,40 +362,153 @@ export function buildThreeWorld(mountEl) {
   scene.add(weatherPoints);
 
   // ============================================================================
-  // ACRÓBATA 3D CON MATERIALES DIFERENCIADOS Y ACCESORIOS POR ASPECTO (`SKIN_VISUALS`)
+  // ACRÓBATA 3D CON MATERIALES DIFERENCIADOS Y ACCESORIOS POR ASPECTO (`SKINS_CATALOG`)
   // ============================================================================
   const acrobatGroup = new THREE.Group();
   acrobatGroup.position.set(0, 0, 0);
   scene.add(acrobatGroup);
 
-  const jacketMat = createSkinPartShaderMaterial(0x1e293b, 0x38bdf8, 1.05);
-  const pantsMat = createSkinPartShaderMaterial(0x0f172a, 0x38bdf8, 0.95);
-  const bootMat = createSkinPartShaderMaterial(0x475569, 0x38bdf8, 1.15);
-  const headMat = createSkinPartShaderMaterial(0x1e293b, 0x38bdf8, 1.1);
+  // Luces dedicadas acopladas al acróbata para que los colores 3D, metales y emisiones brillen nítidamente
+  const acrobatKeyLight = new THREE.PointLight(0xffffff, 3.6, 12);
+  acrobatKeyLight.position.set(0, 1.45, 2.4);
+  acrobatGroup.add(acrobatKeyLight);
 
-  const soleMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
-  const gloveMat = new THREE.MeshBasicMaterial({ color: 0x334155 });
-  const wristBandMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-  const headbandMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-  const ribbonMat = new THREE.MeshBasicMaterial({
+  const acrobatBackLight = new THREE.PointLight(0x38bdf8, 3.4, 12);
+  acrobatBackLight.position.set(0, 1.55, -1.8);
+  acrobatGroup.add(acrobatBackLight);
+
+  // Referencias directas a los materiales de cada parte del cuerpo (BLOQUE 2)
+  const torsoMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    emissive: 0x0b1829,
+    emissiveIntensity: 0.35,
+    metalness: 0.35,
+    roughness: 0.55,
+  });
+  const limbsMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    emissive: 0x070d19,
+    emissiveIntensity: 0.25,
+    metalness: 0.35,
+    roughness: 0.55,
+  });
+  const neonStripMat = new THREE.MeshStandardMaterial({
     color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.35,
+    metalness: 0.2,
+    roughness: 0.2,
+  });
+  const shoesMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 0.45,
+    metalness: 0.5,
+    roughness: 0.35,
+  });
+  const glovesMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 0.45,
+    metalness: 0.45,
+    roughness: 0.35,
+  });
+  const headbandMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.5,
+    metalness: 0.3,
+    roughness: 0.25,
+  });
+
+  // Alias compatibles para mallas del cuerpo
+  const jacketMat = torsoMat;
+  const pantsMat = limbsMat;
+  const bootMat = shoesMat;
+  const headMat = torsoMat;
+  const gloveMat = glovesMat;
+  const dorsalStripMat = neonStripMat;
+
+  const soleMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.4,
+    metalness: 0.3,
+    roughness: 0.25,
+  });
+  const wristBandMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.6,
+    metalness: 0.3,
+    roughness: 0.25,
+  });
+  const ribbonMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.6,
     side: THREE.DoubleSide,
-  });
-  const dorsalStripMat = new THREE.MeshBasicMaterial({
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.85,
+    metalness: 0.2,
+    roughness: 0.3,
   });
 
-  // Materiales de accesorios específicos por skin
-  const whiteReflectiveMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const cyanTacticalNeonMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
-  const purpleIllusionMat = new THREE.MeshBasicMaterial({ color: 0xc084fc });
-  const silverEdgeMat = new THREE.MeshBasicMaterial({ color: 0xf1f5f9 });
-  const crimsonCircuitMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
-  const thrusterRedMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-  const goldAccentMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
-  const darkArmorMat = new THREE.MeshBasicMaterial({ color: 0x080b12 });
+  // Materiales emisivos de accesorios específicos por skin
+  const whiteReflectiveMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xffffff,
+    emissiveIntensity: 2.2,
+    metalness: 0.2,
+    roughness: 0.2,
+  });
+  const cyanTacticalNeonMat = new THREE.MeshStandardMaterial({
+    color: 0x00f2fe,
+    emissive: 0x00f2fe,
+    emissiveIntensity: 2.6,
+    metalness: 0.3,
+    roughness: 0.2,
+  });
+  const purpleIllusionMat = new THREE.MeshStandardMaterial({
+    color: 0xc084fc,
+    emissive: 0xc084fc,
+    emissiveIntensity: 2.4,
+    metalness: 0.4,
+    roughness: 0.25,
+  });
+  const silverEdgeMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    emissive: 0xe2e8f0,
+    emissiveIntensity: 1.5,
+    metalness: 0.85,
+    roughness: 0.18,
+  });
+  const crimsonCircuitMat = new THREE.MeshStandardMaterial({
+    color: 0xff0055,
+    emissive: 0xff0055,
+    emissiveIntensity: 2.8,
+    metalness: 0.4,
+    roughness: 0.2,
+  });
+  const thrusterRedMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: 0xff0055,
+    emissiveIntensity: 2.2,
+    metalness: 0.5,
+    roughness: 0.25,
+  });
+  const goldAccentMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 2.6,
+    metalness: 0.95,
+    roughness: 0.15,
+  });
+  const darkArmorMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0a09,
+    emissive: 0x1c1917,
+    emissiveIntensity: 0.35,
+    metalness: 0.75,
+    roughness: 0.25,
+  });
 
   const createArticulatedLeg = (isLeft) => {
     const hipGroup = new THREE.Group();
@@ -762,7 +840,8 @@ export function buildThreeWorld(mountEl) {
   pommelMesh.position.set(0, 0.51, 0);
   katanaPivot.add(pommelMesh);
 
-  shinobiAccGroup.add(katanaPivot);
+  const singleKatanaMesh = katanaPivot;
+  shinobiAccGroup.add(singleKatanaMesh);
   torsoSpineGroup.add(shinobiAccGroup);
 
   // 6. RONIN IMPERIAL DORADO (x4): Hombreras samurái + placas doradas + DOS Katanas con empuñadura dorada cruzadas en la espalda
@@ -779,7 +858,9 @@ export function buildThreeWorld(mountEl) {
     roninGoldAccGroup.add(plateMesh);
   }
 
-  // Hombreras samurái (Sode) laqueadas con bordes de oro
+  // Sub-grupo 3D: Hombreras samurái doradas (`samuraiShouldersGroup`)
+  const samuraiShouldersGroup = new THREE.Group();
+  samuraiShouldersGroup.visible = false;
   const sodeGeo = new THREE.BoxGeometry(0.16, 0.14, 0.2);
   const leftSode = new THREE.Mesh(sodeGeo, darkArmorMat);
   leftSode.position.set(-0.285, 0.45, 0);
@@ -790,7 +871,7 @@ export function buildThreeWorld(mountEl) {
   );
   leftSodeTrim.position.set(0, 0.06, 0);
   leftSode.add(leftSodeTrim);
-  roninGoldAccGroup.add(leftSode);
+  samuraiShouldersGroup.add(leftSode);
 
   const rightSode = new THREE.Mesh(sodeGeo, darkArmorMat);
   rightSode.position.set(0.285, 0.45, 0);
@@ -801,9 +882,12 @@ export function buildThreeWorld(mountEl) {
   );
   rightSodeTrim.position.set(0, 0.06, 0);
   rightSode.add(rightSodeTrim);
-  roninGoldAccGroup.add(rightSode);
+  samuraiShouldersGroup.add(rightSode);
+  torsoSpineGroup.add(samuraiShouldersGroup);
 
-  // Dos Katanas cruzadas en X con empuñadura dorada
+  // Sub-grupo 3D: Dos Katanas cruzadas en X con empuñadura dorada (`dualGoldKatanasGroup`)
+  const dualGoldKatanasGroup = new THREE.Group();
+  dualGoldKatanasGroup.visible = false;
   const buildGoldenKatana = (rotZ, offsetZ) => {
     const kGroup = new THREE.Group();
     kGroup.position.set(0, 0.3, offsetZ);
@@ -840,13 +924,15 @@ export function buildThreeWorld(mountEl) {
     return kGroup;
   };
 
-  roninGoldAccGroup.add(buildGoldenKatana(-0.62, 0.172));
-  roninGoldAccGroup.add(buildGoldenKatana(0.62, 0.192));
+  dualGoldKatanasGroup.add(buildGoldenKatana(-0.62, 0.172));
+  dualGoldKatanasGroup.add(buildGoldenKatana(0.62, 0.192));
+  roninGoldAccGroup.add(dualGoldKatanasGroup);
   torsoSpineGroup.add(roninGoldAccGroup);
 
-  // 7. ESPECTRO CUÁNTICO (x5): Núcleo energético en la espalda + Halo holográfico alrededor del cuerpo
+  // 7. ESPECTRO CUÁNTICO (x5): Núcleo energético en la espalda + Halo holográfico alrededor del cuerpo (`quantumHaloMesh`)
   const quantumSpecterAccGroup = new THREE.Group();
   quantumSpecterAccGroup.visible = false;
+  const quantumHaloMesh = quantumSpecterAccGroup;
 
   const quantumCoreMesh = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.085, 1),
@@ -946,7 +1032,7 @@ export function buildThreeWorld(mountEl) {
   tacticalVisorMesh.visible = false;
   headGroup.add(tacticalVisorMesh);
 
-  // Leyenda Dorada: Corona/Halo solar sobre la cabeza
+  // Leyenda Dorada: Corona/Halo solar sobre la cabeza (`immortalCrownMesh`)
   const goldenCrownHalo = new THREE.Mesh(
     new THREE.TorusGeometry(0.14, 0.015, 10, 28),
     goldAccentMat
@@ -955,6 +1041,7 @@ export function buildThreeWorld(mountEl) {
   goldenCrownHalo.position.set(0, 0.16, 0);
   goldenCrownHalo.visible = false;
   headGroup.add(goldenCrownHalo);
+  const immortalCrownMesh = goldenCrownHalo;
 
   // Cinta / Bufanda de energía articulada en 3 segmentos reactivos al viento
   const ribbonPivot = new THREE.Group();
@@ -1170,7 +1257,7 @@ export function buildThreeWorld(mountEl) {
     orbMeshes.push({ group, core, halo, trails });
   }
 
-  return {
+  const threeCtx = {
     scene,
     camera,
     renderer,
@@ -1178,6 +1265,8 @@ export function buildThreeWorld(mountEl) {
     rimDirLight,
     cyanPoleLight,
     goldOrbLight,
+    acrobatKeyLight,
+    acrobatBackLight,
     backlitBackdrop,
     cableTex,
     arrivalGroup,
@@ -1194,6 +1283,13 @@ export function buildThreeWorld(mountEl) {
     weatherMat,
     weatherCount,
     acrobatGroup,
+    // Referencias directas a materiales del cuerpo (BLOQUE 2)
+    torsoMat,
+    limbsMat,
+    neonStripMat,
+    shoesMat,
+    glovesMat,
+    headbandMat,
     jacketMat,
     pantsMat,
     bootMat,
@@ -1201,9 +1297,14 @@ export function buildThreeWorld(mountEl) {
     soleMat,
     gloveMat,
     wristBandMat,
-    headbandMat,
     ribbonMat,
     dorsalStripMat,
+    // Sub-grupos 3D de accesorios en espalda, hombros y cabeza (BLOQUE 2)
+    singleKatanaMesh,
+    dualGoldKatanasGroup,
+    samuraiShouldersGroup,
+    quantumHaloMesh,
+    immortalCrownMesh,
     urbanoAccGroup,
     nightRunnerAccGroup,
     infiltradoAccGroup,
@@ -1257,6 +1358,165 @@ export function buildThreeWorld(mountEl) {
     dynamicCamDist: 6.2,
     dynamicCamY: 3.38,
   };
+
+  activeThreeCtxRef = threeCtx;
+  applySkinToAcrobat('urbano', threeCtx, false);
+  return threeCtx;
+}
+
+// ============================================================================
+// BLOQUE 2: MUTACIÓN REAL EN VIVO DEL MODELO 3D (`applySkinToAcrobat`)
+// ============================================================================
+export function applySkinToAcrobat(skinId, threeCtxOverride = null, isFever = false) {
+  const ctx = threeCtxOverride || activeThreeCtxRef;
+  if (!ctx) return null;
+
+  const skinKey = resolveSkinKey(skinId);
+  const skin = SKINS_CATALOG[skinKey] || SKINS_CATALOG.urbano;
+  const styleType = skin.styleType || skinKey;
+  const metalVal = skin.metalness ?? 0.45;
+  const roughVal = skin.roughness ?? 0.35;
+  const stripEmissiveInt = isFever ? 3.2 : skin.emissiveIntensity ?? 2.2;
+  const feverColorHex = 0xfde047;
+
+  // 1. Actualizar inmediatamente `.color.set(...)`, `.emissive.set(...)` y `.emissiveIntensity` en todos los materiales del cuerpo
+  if (ctx.torsoMat) {
+    ctx.torsoMat.color.set(skin.torsoColor || skin.jacketHex);
+    ctx.torsoMat.emissive.set(isFever ? feverColorHex : skin.torsoEmissive || skin.jacketEmissiveHex);
+    ctx.torsoMat.emissiveIntensity = isFever ? 1.15 : skin.torsoEmissiveIntensity ?? 0.6;
+    ctx.torsoMat.metalness = metalVal;
+    ctx.torsoMat.roughness = roughVal;
+    ctx.torsoMat.needsUpdate = true;
+  }
+
+  if (ctx.limbsMat) {
+    ctx.limbsMat.color.set(skin.limbsColor || skin.pantsHex);
+    ctx.limbsMat.emissive.set(isFever ? feverColorHex : skin.limbsEmissive || skin.pantsHex);
+    ctx.limbsMat.emissiveIntensity = isFever ? 0.95 : skin.limbsEmissiveIntensity ?? 0.45;
+    ctx.limbsMat.metalness = metalVal;
+    ctx.limbsMat.roughness = roughVal;
+    ctx.limbsMat.needsUpdate = true;
+  }
+
+  if (ctx.neonStripMat) {
+    ctx.neonStripMat.color.set(isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex);
+    ctx.neonStripMat.emissive.set(isFever ? feverColorHex : skin.neonStripColor || skin.dorsalHex);
+    ctx.neonStripMat.emissiveIntensity = stripEmissiveInt;
+    ctx.neonStripMat.needsUpdate = true;
+  }
+
+  if (ctx.shoesMat) {
+    ctx.shoesMat.color.set(skin.shoesColor || skin.bootHex);
+    ctx.shoesMat.emissive.set(isFever ? feverColorHex : skin.shoesColor || skin.soleHex);
+    ctx.shoesMat.emissiveIntensity = isFever ? 1.4 : styleType === 'urbano' ? 0.35 : 1.15;
+    ctx.shoesMat.metalness = metalVal;
+    ctx.shoesMat.roughness = roughVal;
+    ctx.shoesMat.needsUpdate = true;
+  }
+
+  if (ctx.glovesMat) {
+    ctx.glovesMat.color.set(skin.glovesColor || skin.gloveHex);
+    ctx.glovesMat.emissive.set(isFever ? feverColorHex : skin.glovesColor || skin.wristHex);
+    ctx.glovesMat.emissiveIntensity =
+      styleType === 'ilusionista' || styleType === 'quantum_specter' || styleType === 'immortal_legend'
+        ? 1.75
+        : 0.65;
+    ctx.glovesMat.metalness = metalVal;
+    ctx.glovesMat.roughness = roughVal;
+    ctx.glovesMat.needsUpdate = true;
+  }
+
+  if (ctx.headbandMat) {
+    ctx.headbandMat.color.set(isFever ? feverColorHex : skin.headbandColor || skin.headbandHex);
+    ctx.headbandMat.emissive.set(isFever ? feverColorHex : skin.headbandColor || skin.headbandHex);
+    ctx.headbandMat.emissiveIntensity = stripEmissiveInt * 0.9;
+    ctx.headbandMat.needsUpdate = true;
+  }
+
+  if (ctx.soleMat) {
+    ctx.soleMat.color.set(skin.soleColor || skin.soleHex);
+    ctx.soleMat.emissive.set(isFever ? feverColorHex : skin.soleColor || skin.soleHex);
+    ctx.soleMat.emissiveIntensity = stripEmissiveInt * 0.85;
+    ctx.soleMat.needsUpdate = true;
+  }
+
+  if (ctx.wristBandMat) {
+    ctx.wristBandMat.color.set(skin.wristColor || skin.wristHex);
+    ctx.wristBandMat.emissive.set(isFever ? feverColorHex : skin.wristColor || skin.wristHex);
+    ctx.wristBandMat.emissiveIntensity = stripEmissiveInt * 0.9;
+    ctx.wristBandMat.needsUpdate = true;
+  }
+
+  if (ctx.ribbonMat) {
+    ctx.ribbonMat.color.set(isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex);
+    ctx.ribbonMat.emissive.set(isFever ? feverColorHex : skin.ribbonColor || skin.ribbonHex);
+    ctx.ribbonMat.emissiveIntensity = stripEmissiveInt * 0.9;
+    ctx.ribbonMat.needsUpdate = true;
+  }
+
+  if (ctx.acrobatBackLight) {
+    ctx.acrobatBackLight.color.set(isFever ? feverColorHex : skin.neonStripColor || skin.rimHex);
+  }
+
+  const ribbonLengthScale =
+    styleType === 'shinobi' || styleType === 'immortal_legend'
+      ? 1.48
+      : styleType === 'ilusionista' || styleType === 'ronin_gold'
+      ? 1.32
+      : 1.0;
+  if (ctx.ribbonPivot) {
+    ctx.ribbonPivot.scale.set(ribbonLengthScale, 1, 1);
+  }
+
+  // 2. Activar/desactivar (`.visible = true / false`) sub-grupos 3D de accesorios según la skin equipada
+  const isUrbano = styleType === 'urbano';
+  const isNightRunner = styleType === 'night_runner';
+  const isInfiltrado = styleType === 'infiltrado';
+  const isIlusionista = styleType === 'ilusionista';
+  const isShinobi = styleType === 'shinobi';
+  const isRoninGold = styleType === 'ronin_gold';
+  const isQuantumSpecter = styleType === 'quantum_specter';
+  const isGolden = styleType === 'immortal_legend' || styleType === 'leyenda_dorada';
+
+  if (ctx.urbanoAccGroup) ctx.urbanoAccGroup.visible = isUrbano;
+  if (ctx.leftLeg?.cargoPocketMesh) ctx.leftLeg.cargoPocketMesh.visible = isUrbano;
+  if (ctx.rightLeg?.cargoPocketMesh) ctx.rightLeg.cargoPocketMesh.visible = isUrbano;
+
+  if (ctx.nightRunnerAccGroup) ctx.nightRunnerAccGroup.visible = isNightRunner;
+  if (ctx.leftArm?.sleeveReflectiveMesh) ctx.leftArm.sleeveReflectiveMesh.visible = isNightRunner;
+  if (ctx.rightArm?.sleeveReflectiveMesh) ctx.rightArm.sleeveReflectiveMesh.visible = isNightRunner;
+  if (ctx.leftLeg?.thighReflectiveMesh) ctx.leftLeg.thighReflectiveMesh.visible = isNightRunner;
+  if (ctx.rightLeg?.thighReflectiveMesh) ctx.rightLeg.thighReflectiveMesh.visible = isNightRunner;
+  if (ctx.leftLeg?.calfReflectiveMesh) ctx.leftLeg.calfReflectiveMesh.visible = isNightRunner;
+  if (ctx.rightLeg?.calfReflectiveMesh) ctx.rightLeg.calfReflectiveMesh.visible = isNightRunner;
+
+  if (ctx.infiltradoAccGroup) ctx.infiltradoAccGroup.visible = isInfiltrado;
+  if (ctx.tacticalVisorMesh) ctx.tacticalVisorMesh.visible = isInfiltrado || isQuantumSpecter;
+  if (ctx.leftLeg?.tacticalKneeNeon) ctx.leftLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+  if (ctx.rightLeg?.tacticalKneeNeon) ctx.rightLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+  if (ctx.leftLeg?.tacticalHeelNeon) ctx.leftLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
+  if (ctx.rightLeg?.tacticalHeelNeon) ctx.rightLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
+
+  if (ctx.ilusionistaAccGroup) ctx.ilusionistaAccGroup.visible = isIlusionista;
+
+  // Sub-grupos 3D requeridos en BLOQUE 2:
+  if (ctx.shinobiAccGroup) ctx.shinobiAccGroup.visible = isShinobi;
+  if (ctx.singleKatanaMesh) ctx.singleKatanaMesh.visible = isShinobi;
+  if (ctx.leftLeg?.shinobiBootThruster) ctx.leftLeg.shinobiBootThruster.visible = isShinobi;
+  if (ctx.rightLeg?.shinobiBootThruster) ctx.rightLeg.shinobiBootThruster.visible = isShinobi;
+
+  if (ctx.roninGoldAccGroup) ctx.roninGoldAccGroup.visible = isRoninGold;
+  if (ctx.dualGoldKatanasGroup) ctx.dualGoldKatanasGroup.visible = isRoninGold;
+  if (ctx.samuraiShouldersGroup) ctx.samuraiShouldersGroup.visible = isRoninGold || isGolden;
+
+  if (ctx.quantumSpecterAccGroup) ctx.quantumSpecterAccGroup.visible = isQuantumSpecter;
+  if (ctx.quantumHaloMesh) ctx.quantumHaloMesh.visible = isQuantumSpecter;
+
+  if (ctx.goldenLegendAccGroup) ctx.goldenLegendAccGroup.visible = isGolden;
+  if (ctx.immortalCrownMesh) ctx.immortalCrownMesh.visible = isGolden;
+  if (ctx.goldenCrownHalo) ctx.goldenCrownHalo.visible = isGolden;
+
+  return skin;
 }
 
 export function updateAndRenderThreeScene(
@@ -1283,84 +1543,16 @@ export function updateAndRenderThreeScene(
   const isFever = Boolean(eng.frenzyActive);
 
   // ============================================================================
-  // 1. APLICACIÓN EN TIEMPO REAL DEL ASPECTO EQUIPADO (`equippedSkinRef.current`)
+  // 1. APLICACIÓN EN TIEMPO REAL DEL ASPECTO EQUIPADO (`applySkinToAcrobat`)
   // ============================================================================
-  const skinVis = resolveSkinVisual(activeSkinId || eng.skinObj?.id);
+  const skinVis =
+    applySkinToAcrobat(activeSkinId || eng.skinObj?.id, threeCtx, isFever) ||
+    resolveSkinVisual(activeSkinId || eng.skinObj?.id);
   const styleType = skinVis.styleType;
   const rimHex = isFever ? 0xfde047 : skinVis.rimHex;
-  const rimStrength = isFever ? 1.75 : skinVis.rimStrength;
-
-  // Actualizar colores y rim light de torso, pantalón, botas y cabeza
-  threeCtx.jacketMat.uniforms.uBaseColor.value.setHex(skinVis.jacketHex);
-  threeCtx.jacketMat.uniforms.uRimColor.value.setHex(rimHex);
-  threeCtx.jacketMat.uniforms.uRimStrength.value = rimStrength;
-
-  threeCtx.pantsMat.uniforms.uBaseColor.value.setHex(skinVis.pantsHex);
-  threeCtx.pantsMat.uniforms.uRimColor.value.setHex(rimHex);
-  threeCtx.pantsMat.uniforms.uRimStrength.value = rimStrength * 0.9;
-
-  threeCtx.bootMat.uniforms.uBaseColor.value.setHex(skinVis.bootHex);
-  threeCtx.bootMat.uniforms.uRimColor.value.setHex(rimHex);
-  threeCtx.bootMat.uniforms.uRimStrength.value = rimStrength * 1.1;
-
-  threeCtx.headMat.uniforms.uBaseColor.value.setHex(skinVis.headHex);
-  threeCtx.headMat.uniforms.uRimColor.value.setHex(rimHex);
-  threeCtx.headMat.uniforms.uRimStrength.value = rimStrength;
-
-  // Actualizar suelas, guantes, muñequeras, cinta de cabeza, bufanda y línea dorsal
-  threeCtx.soleMat.color.setHex(skinVis.soleHex);
-  threeCtx.gloveMat.color.setHex(skinVis.gloveHex);
-  threeCtx.wristBandMat.color.setHex(skinVis.wristHex);
-  threeCtx.headbandMat.color.setHex(skinVis.headbandHex);
-  threeCtx.ribbonMat.color.setHex(isFever ? 0xfde047 : skinVis.ribbonHex);
-  threeCtx.dorsalStripMat.color.setHex(isFever ? 0xfde047 : skinVis.dorsalHex);
-
-  const ribbonLengthScale =
-    styleType === 'shinobi' || styleType === 'immortal_legend'
-      ? 1.48
-      : styleType === 'ilusionista' || styleType === 'ronin_gold'
-      ? 1.32
-      : 1.0;
-  threeCtx.ribbonPivot.scale.set(ribbonLengthScale, 1, 1);
-
-  // Activar/desactivar grupos de accesorios 3D según el aspecto activo
-  const isUrbano = styleType === 'urbano';
-  const isNightRunner = styleType === 'night_runner';
-  const isInfiltrado = styleType === 'infiltrado';
-  const isIlusionista = styleType === 'ilusionista';
-  const isShinobi = styleType === 'shinobi';
-  const isRoninGold = styleType === 'ronin_gold';
   const isQuantumSpecter = styleType === 'quantum_specter';
   const isGolden = styleType === 'immortal_legend' || styleType === 'leyenda_dorada';
 
-  threeCtx.urbanoAccGroup.visible = isUrbano;
-  threeCtx.leftLeg.cargoPocketMesh.visible = isUrbano;
-  threeCtx.rightLeg.cargoPocketMesh.visible = isUrbano;
-
-  threeCtx.nightRunnerAccGroup.visible = isNightRunner;
-  threeCtx.leftArm.sleeveReflectiveMesh.visible = isNightRunner;
-  threeCtx.rightArm.sleeveReflectiveMesh.visible = isNightRunner;
-  threeCtx.leftLeg.thighReflectiveMesh.visible = isNightRunner;
-  threeCtx.rightLeg.thighReflectiveMesh.visible = isNightRunner;
-  threeCtx.leftLeg.calfReflectiveMesh.visible = isNightRunner;
-  threeCtx.rightLeg.calfReflectiveMesh.visible = isNightRunner;
-
-  threeCtx.infiltradoAccGroup.visible = isInfiltrado;
-  threeCtx.tacticalVisorMesh.visible = isInfiltrado || isQuantumSpecter;
-  threeCtx.leftLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
-  threeCtx.rightLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
-  threeCtx.leftLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
-  threeCtx.rightLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
-
-  threeCtx.ilusionistaAccGroup.visible = isIlusionista;
-
-  threeCtx.shinobiAccGroup.visible = isShinobi;
-  threeCtx.leftLeg.shinobiBootThruster.visible = isShinobi;
-  threeCtx.rightLeg.shinobiBootThruster.visible = isShinobi;
-
-  threeCtx.roninGoldAccGroup.visible = isRoninGold;
-
-  threeCtx.quantumSpecterAccGroup.visible = isQuantumSpecter;
   if (isQuantumSpecter) {
     if (threeCtx.quantumCoreMesh) {
       threeCtx.quantumCoreMesh.rotation.y = nowSec * 2.8;
@@ -1376,8 +1568,6 @@ export function updateAndRenderThreeScene(
     }
   }
 
-  threeCtx.goldenLegendAccGroup.visible = isGolden;
-  threeCtx.goldenCrownHalo.visible = isGolden;
   if (isGolden) {
     if (threeCtx.solarAuraRing) {
       threeCtx.solarAuraRing.rotation.z = nowSec * 2.1;
