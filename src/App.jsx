@@ -459,7 +459,7 @@ export default function App() {
         soundEngine.playMissAlert();
         return;
       }
-      const chosenCountry = onboardingCountryInput || 'AR';
+      const chosenCountry = String(onboardingCountryInput || 'AR').toUpperCase().slice(0, 2) || 'AR';
       setOnboardingError(false);
       setPlayerName(cleanName);
       setPlayerCountry(chosenCountry);
@@ -1818,11 +1818,19 @@ export default function App() {
   return (
     <div className="app-root">
       <div className="phone-frame">
-        {/* CONTENEDOR 3D WEBGL (THREE.JS VECTOR ENGINE + ASPECTOS EN VIVO + MONUMENTOS 3D) */}
+        {/* CONTENEDOR 3D WEBGL (THREE.JS VECTOR ENGINE + ASPECTOS EN VIVO + MONUMENTOS 3D)
+            Capa de fondo estricta: z-index 0 y sin eventos de puntero (la UI React vive encima). */}
         <div
           ref={mountRef}
           className="game-canvas"
-          style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            pointerEvents: 'none',
+          }}
         />
 
         {/* TOAST FEEDBACK */}
@@ -1897,7 +1905,9 @@ export default function App() {
                         type="button"
                         key={c.code}
                         className={`onboarding-country-chip ${selected ? 'selected' : ''}`}
-                        onClick={() => setOnboardingCountryInput(c.code)}
+                        onClick={() =>
+                          setOnboardingCountryInput(String(c.code || 'AR').toUpperCase().slice(0, 2))
+                        }
                       >
                         <span className="country-chip-flag">{String(c.flag || '🏳️')}</span>
                         <span className="country-chip-code">{String(c.code || 'AR')}</span>
@@ -2106,13 +2116,22 @@ export default function App() {
                     {hudData.metersRemaining}m / {hudData.totalMeters}m
                   </span>
                 </div>
-                <button
-                  className="hud-pause-btn"
-                  onClick={triggerPause}
-                  aria-label="Pause"
-                >
-                  ⏸
-                </button>
+                <div className="vector-hud-buttons">
+                  <button
+                    className="hud-pause-btn"
+                    onClick={() => setSoundEnabled((s) => !s)}
+                    aria-label="Audio"
+                  >
+                    {soundEnabled ? '🔊' : '🔇'}
+                  </button>
+                  <button
+                    className="hud-pause-btn"
+                    onClick={triggerPause}
+                    aria-label="Pause"
+                  >
+                    ⏸
+                  </button>
+                </div>
               </div>
 
               <div className="vector-progress-rail">
@@ -2254,6 +2273,16 @@ export default function App() {
             <div className="currency-top-bar">
               <div className="currency-group">
                 <div
+                  className="currency-pill league"
+                  onClick={() => setActiveTab('league')}
+                  title={t.leagueBanner}
+                >
+                  🏆 {lang === 'es' ? 'LIGA' : 'LEAGUE'} #{playerRank}
+                </div>
+                <div className="currency-pill level">
+                  ⭐ {t.level} {level}
+                </div>
+                <div
                   className="currency-pill coins"
                   onClick={() => setShowAdModal('coins')}
                   title={t.freeCoinsAd}
@@ -2267,12 +2296,6 @@ export default function App() {
                 >
                   💎 {gems.toLocaleString()} <span className="plus-badge">+</span>
                 </div>
-                <div
-                  className="currency-pill lp"
-                  onClick={() => setActiveTab('league')}
-                >
-                  🏆 #{playerRank}
-                </div>
               </div>
 
               <div className="utility-group">
@@ -2281,9 +2304,9 @@ export default function App() {
                   onClick={openEditProfileModal}
                   title={lang === 'es' ? 'Editar Perfil' : 'Edit Profile'}
                 >
-                  <span>{playerFlagEmoji}</span>
+                  <span>{String(playerFlagEmoji || '🇦🇷')}</span>
                   <span className="profile-header-name">
-                    {playerName || 'Equilibrista'}
+                    {String(playerName || 'Equilibrista')}
                   </span>
                   <span className="profile-header-edit">✏️</span>
                 </button>
@@ -2297,91 +2320,96 @@ export default function App() {
               </div>
             </div>
 
-            <div className="tab-content-area">
+            <div className={`tab-content-area ${activeTab === 'home' ? 'home-mode' : ''}`}>
               {/* TAB 1: INICIO / CAMPAÑA */}
               {activeTab === 'home' && (
                 <div className="home-card">
                   <div className="brand-header">
-                    <div className="cover-hero-banner">
-                      <img
-                        src={`${import.meta.env.BASE_URL}icon.jpg`}
-                        alt="NO MIRES ABAJO Portada Oficial"
-                        className="cover-hero-img"
-                      />
-                      <div className="cover-hero-overlay">
-                        <span className="official-badge">
-                          {vipPassActive ? '👑 PASE VIP PRO ACTIVO' : t.officialEdition}
-                        </span>
-                        <h1 className="game-logo-title">{t.title}</h1>
-                        <p className="game-logo-sub">
-                          🗿 {cfg.city.monumentName?.[lang] || t.subtitle}
-                        </p>
-                      </div>
-                    </div>
+                    <span className="official-badge">
+                      {vipPassActive ? '👑 PASE VIP PRO ACTIVO' : t.officialEdition}
+                    </span>
+                    <h1 className="game-logo-title">{t.title}</h1>
+                    <p className="game-logo-sub">
+                      🗿 {asText(cfg.city.monumentName, lang, t.subtitle)}
+                    </p>
                   </div>
 
-                  <div
-                    className="city-campaign-card"
-                    onClick={() => setShowCitySelectorModal(true)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="city-flag-circle">{cfg.city.flag}</div>
-                    <div className="city-details">
-                      <div className="city-stage-tag">
-                        {activeVipCity
-                          ? `👑 CIUDAD VIP (x${activeVipCity.rewardMult} PAGO)`
-                          : `${t.worldTour} • ${t.city} ${cfg.cityIndex + 1}/20`}{' '}
-                        <span
-                          style={{
-                            color: '#fde047',
-                            marginLeft: 6,
-                            textDecoration: 'underline',
-                            fontSize: '10px',
-                          }}
-                        >
-                          {lang === 'es' ? '(Cambiar 🌍)' : '(Change 🌍)'}
-                        </span>
-                      </div>
-                      <div className="city-title-text">{cfg.city.name[lang]}</div>
-                      <div className="city-level-sub">
-                        {t.level} {level} • {currentSkinObj.icon} {currentSkinObj.name[lang]}
-                      </div>
-                    </div>
-                    <div className="multiplier-chip">x{totalScoreMultiplier}</div>
-                  </div>
-
-                  <div className="quick-stats-grid">
-                    <div className="stat-box">
-                      <span className="stat-lbl">{t.bestScore}</span>
-                      <span className="stat-val">{bestScore.toLocaleString()}</span>
-                    </div>
-                    <div className="stat-box">
-                      <span className="stat-lbl">
-                        {lang === 'es' ? 'MULTI TOTAL ACTIVO' : 'ACTIVE TOTAL MULTI'}
-                      </span>
-                      <span className="stat-val gold">
-                        x{totalScoreMultiplier} PTS / x{totalCoinMultiplier} 🪙
-                      </span>
-                    </div>
-                  </div>
-
-                  <button className="play-cta-button" onClick={startPlay}>
-                    <span className="play-icon">▶</span> {t.playNow} ({t.level} {level})
-                  </button>
-
-                  <div className="reward-ads-row">
-                    <button
-                      className="ad-reward-btn coins"
-                      onClick={() => setShowAdModal('coins')}
+                  <div className="home-bottom-panel">
+                    <div
+                      className="city-campaign-card"
+                      onClick={() => setShowCitySelectorModal(true)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      🎬 {t.freeCoinsAd}
+                      <div className="city-flag-circle">{cfg.city.flag}</div>
+                      <div className="city-details">
+                        <div className="city-stage-tag">
+                          {activeVipCity
+                            ? `👑 CIUDAD VIP (x${activeVipCity.rewardMult} PAGO)`
+                            : `${t.worldTour} • ${t.city} ${cfg.cityIndex + 1}/20`}
+                        </div>
+                        <div className="city-title-text">{asText(cfg.city.name, lang)}</div>
+                        <div className="city-level-sub">
+                          {t.level} {level} • {currentSkinObj.icon}{' '}
+                          {asText(currentSkinObj.name, lang)}
+                        </div>
+                      </div>
+                      <div className="multiplier-chip">x{totalScoreMultiplier}</div>
+                    </div>
+
+                    <div className="home-quick-nav-grid">
+                      <button
+                        type="button"
+                        className="home-quick-nav-btn"
+                        onClick={() => setShowCitySelectorModal(true)}
+                      >
+                        <span className="quick-nav-ic">🌍</span>
+                        <span>{lang === 'es' ? '20 Ciudades' : '20 Cities'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="home-quick-nav-btn"
+                        onClick={() => setActiveTab('armory')}
+                      >
+                        <span className="quick-nav-ic">⚙️</span>
+                        <span>{lang === 'es' ? 'Armería' : 'Armory'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="home-quick-nav-btn"
+                        onClick={() => setActiveTab('skins')}
+                      >
+                        <span className="quick-nav-ic">🧥</span>
+                        <span>{lang === 'es' ? 'Aspectos' : 'Skins'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="home-quick-nav-btn gold"
+                        onClick={() => setActiveTab('store')}
+                      >
+                        <span className="quick-nav-ic">💎</span>
+                        <span>{lang === 'es' ? 'Cofres' : 'Chests'}</span>
+                      </button>
+                    </div>
+
+                    <button className="play-cta-button" onClick={startPlay}>
+                      <span className="play-icon">▶</span>{' '}
+                      {lang === 'es' ? 'JUGAR / SALTAR AL CABLE' : 'PLAY / STEP ON THE WIRE'}
                     </button>
-                    <button
-                      className="ad-reward-btn gems"
-                      onClick={() => setShowAdModal('gems')}
-                    >
-                      🎬 {t.freeGemsAd}
-                    </button>
+
+                    <div className="reward-ads-row">
+                      <button
+                        className="ad-reward-btn coins"
+                        onClick={() => setShowAdModal('coins')}
+                      >
+                        🎬 {t.freeCoinsAd}
+                      </button>
+                      <button
+                        className="ad-reward-btn gems"
+                        onClick={() => setShowAdModal('gems')}
+                      >
+                        🎬 {t.freeGemsAd}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
