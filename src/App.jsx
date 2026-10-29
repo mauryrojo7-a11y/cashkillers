@@ -138,12 +138,13 @@ export default function App() {
   const [equippedSkin, setEquippedSkin] = useState(() =>
     resolveSkinKey(saved?.equippedSkin || 'urbano')
   );
+  const [previewSkin, setPreviewSkin] = useState(null);
 
   // PASO 1: Referencia sincronizada en tiempo real para `equippedSkin` en el motor 3D
   const equippedSkinRef = useRef(equippedSkin);
   useEffect(() => {
-    equippedSkinRef.current = equippedSkin;
-  }, [equippedSkin]);
+    equippedSkinRef.current = previewSkin || equippedSkin;
+  }, [equippedSkin, previewSkin]);
 
   const [unlockedPoles, setUnlockedPoles] = useState(saved?.unlockedPoles || ['pole_basic']);
   const [equippedPole, setEquippedPole] = useState(saved?.equippedPole || 'pole_basic');
@@ -166,7 +167,11 @@ export default function App() {
   const activeTabRef = useRef(activeTab);
   useEffect(() => {
     activeTabRef.current = activeTab;
-  }, [activeTab]);
+    if (activeTab !== 'skins' && previewSkin) {
+      setPreviewSkin(null);
+      equippedSkinRef.current = equippedSkin;
+    }
+  }, [activeTab, previewSkin, equippedSkin]);
 
   const [gameState, setGameState] = useState('menu'); // 'menu' | 'playing' | 'paused' | 'victory' | 'gameover'
   const [showAdModal, setShowAdModal] = useState(null); // null | 'revive' | 'double' | 'gems' | 'coins'
@@ -205,6 +210,8 @@ export default function App() {
   const cfg = getLevelConfig(level, activeVipCity);
   const currentSkinObj = resolveSkinObject(equippedSkin);
   const currentSkinVisual = resolveSkinVisual(equippedSkin);
+  const displayedSkinObj = resolveSkinObject(previewSkin || equippedSkin);
+  const displayedSkinVisual = resolveSkinVisual(previewSkin || equippedSkin);
   const currentPoleObj = BALANCE_POLES.find((p) => p.id === equippedPole) || BALANCE_POLES[0];
   const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
 
@@ -557,6 +564,8 @@ export default function App() {
       setShowOnboardingModal(true);
       return;
     }
+    setPreviewSkin(null);
+    equippedSkinRef.current = equippedSkin;
     initGameSession(false);
     setGameState('playing');
   };
@@ -866,7 +875,11 @@ export default function App() {
           // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto en vivo
           const armoryPoleBonus = Math.min(0.45, (eng.gear.pole || 0) * 0.048);
           const poleGravityRed = eng.poleObj?.gravityReduction || 0;
-          const totalGravityFactor = Math.max(0.22, (1 - armoryPoleBonus) * (1 - poleGravityRed));
+          const skinGravityRed = liveSkinObj.gravityReduction || 0;
+          const totalGravityFactor = Math.max(
+            0.18,
+            (1 - armoryPoleBonus) * (1 - poleGravityRed) * (1 - skinGravityRed)
+          );
 
           const armoryBootBonus = Math.min(0.48, (eng.gear.boots || 0) * 0.052);
           const skinWindRed = liveSkinObj.windReduction || 0;
@@ -876,6 +889,8 @@ export default function App() {
             0.25,
             1 - Math.min(0.75, (eng.poleObj?.stepDamp || 0) + (liveSkinObj.stepDampBonus || 0))
           );
+
+          const skinRecoveryBonus = liveSkinObj.recoveryBonus || 0;
 
           // 2. Viento y Ráfagas
           eng.windTimer -= dt;
@@ -921,11 +936,11 @@ export default function App() {
             soundEngine.playFootstep(lCfg.walkSpeed);
           }
 
-          // 4. Física de Péndulo Invertido
+          // 4. Física de Péndulo Invertido (con bonus de recuperación de Night Runner / Pro Skins)
           const gravityTorque =
             Math.sin(eng.angle) * lCfg.gravity * totalGravityFactor * (eng.hookActive ? 0.25 : 1);
           const windTorque = eng.windForce * 0.78 * (eng.hookActive ? 0.2 : 1);
-          const playerTorque = eng.controlInput * 3.15;
+          const playerTorque = eng.controlInput * 3.15 * (1 + skinRecoveryBonus);
           const microTurbulence =
             Math.sin(now * 0.0047) *
             0.12 *
@@ -1375,8 +1390,27 @@ export default function App() {
   };
 
   // ============================================================================
-  // COMPRA / EQUIPAMIENTO DE ASPECTOS CON ACTUALIZACIÓN INSTANTÁNEA EN `equippedSkinRef`
+  // COMPRA / EQUIPAMIENTO / VISTA PREVIA DE ASPECTOS CON ACTUALIZACIÓN INSTANTÁNEA EN `equippedSkinRef`
   // ============================================================================
+  const handlePreviewSkin = (skin) => {
+    const skinKey = resolveSkinKey(skin.id);
+    if (previewSkin === skinKey) {
+      setPreviewSkin(null);
+      equippedSkinRef.current = equippedSkin;
+      engineRef.current.skinObj = resolveSkinObject(equippedSkin);
+      return;
+    }
+    equippedSkinRef.current = skinKey;
+    engineRef.current.skinObj = skin;
+    setPreviewSkin(skinKey);
+    soundEngine.playCatch(3, false);
+    showToast(
+      lang === 'es'
+        ? `👁️ Vista Previa 3D: ${skin.icon} ${skin.name.es}`
+        : `👁️ 3D Live Preview: ${skin.icon} ${skin.name.en}`
+    );
+  };
+
   const handleSelectOrBuySkin = (skin) => {
     const skinKey = resolveSkinKey(skin.id);
     const isOwned =
@@ -1388,7 +1422,8 @@ export default function App() {
       if (!unlockedSkins.includes(skinKey)) {
         setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
       }
-      // Sincronización inmediata del Ref + Estado para cambio visual en el próximo frame
+      // Sincronización inmediata del Ref + Estado para cambio visual en el mismo milisegundo
+      setPreviewSkin(null);
       equippedSkinRef.current = skinKey;
       engineRef.current.skinObj = skin;
       setEquippedSkin(skinKey);
@@ -1401,28 +1436,37 @@ export default function App() {
       if (coins >= skin.cost) {
         setCoins((c) => c - skin.cost);
         setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+        setPreviewSkin(null);
         equippedSkinRef.current = skinKey;
         engineRef.current.skinObj = skin;
         setEquippedSkin(skinKey);
         soundEngine.playVictory();
         showToast(`${skin.icon} ${skin.name[lang]} ${t.equipped}!`);
       } else {
+        // Aun sin monedas, activa vista previa 3D inmediata para que el jugador vea la skin en pantalla
+        equippedSkinRef.current = skinKey;
+        engineRef.current.skinObj = skin;
+        setPreviewSkin(skinKey);
         showToast(
           lang === 'es'
-            ? `🪙 Necesitás ${skin.cost.toLocaleString()} Monedas`
-            : `🪙 Need ${skin.cost.toLocaleString()} Coins`
+            ? `🪙 Necesitás ${skin.cost.toLocaleString()} Monedas (Vista Previa 3D activa)`
+            : `🪙 Need ${skin.cost.toLocaleString()} Coins (3D Preview active)`
         );
       }
     } else {
       if (gems >= skin.gemCost) {
         setGems((g) => g - skin.gemCost);
         setUnlockedSkins((prev) => Array.from(new Set([...prev, skinKey])));
+        setPreviewSkin(null);
         equippedSkinRef.current = skinKey;
         engineRef.current.skinObj = skin;
         setEquippedSkin(skinKey);
         soundEngine.playVictory();
         showToast(`👑 ${skin.name[lang]} Desbloqueado y Equipado!`);
       } else {
+        equippedSkinRef.current = skinKey;
+        engineRef.current.skinObj = skin;
+        setPreviewSkin(skinKey);
         setActiveTab('store');
         showToast(
           lang === 'es'
@@ -1562,10 +1606,20 @@ export default function App() {
       setUnlockedPoles((prev) => Array.from(new Set([...prev, 'pole_imperial', 'pole_quantum'])));
       setEquippedPole('pole_imperial');
       setUnlockedSkins((prev) =>
-        Array.from(new Set([...prev, 'shinobi', 'leyenda_dorada']))
+        Array.from(
+          new Set([
+            ...prev,
+            'shinobi',
+            'ronin_gold',
+            'quantum_specter',
+            'immortal_legend',
+            'leyenda_dorada',
+          ])
+        )
       );
-      equippedSkinRef.current = 'leyenda_dorada';
-      setEquippedSkin('leyenda_dorada');
+      setPreviewSkin(null);
+      equippedSkinRef.current = 'immortal_legend';
+      setEquippedSkin('immortal_legend');
       setOwnedMultipliers((prev) => Array.from(new Set([...prev, 'mult_x3_pro'])));
       setUnlockedVipCities(VIP_CITIES.map((vc) => vc.id));
     }
@@ -2425,7 +2479,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* TAB 3: ASPECTOS CON VISTA PREVIA 3D EN VIVO + BADGE DE PALETA DE NEÓN */}
+              {/* TAB 3: ASPECTOS CON VISTA PREVIA 3D EN VIVO + 5 SKINS DE MONEDAS + 3 SKINS PRO */}
               {activeTab === 'skins' && (
                 <div className="panel-card skins-panel-card">
                   <h2 className="panel-heading">🎭 {t.skinsTitle}</h2>
@@ -2434,18 +2488,26 @@ export default function App() {
                   <div className="skin-3d-live-window">
                     <div className="skin-live-top-tag">
                       <span>
-                        🎥 {lang === 'es' ? 'VISTA 3D EN TIEMPO REAL' : 'LIVE 3D PREVIEW'}
+                        🎥{' '}
+                        {previewSkin
+                          ? lang === 'es'
+                            ? 'VISTA PREVIA 3D ACTIVA'
+                            : '3D PREVIEW ACTIVE'
+                          : lang === 'es'
+                          ? 'VISTA 3D EN TIEMPO REAL'
+                          : 'LIVE 3D PREVIEW'}
                       </span>
                       <span className="skin-live-mult-chip">
-                        {currentSkinObj.icon} {currentSkinVisual.multLabel} (TOTAL x{totalScoreMultiplier})
+                        {displayedSkinObj.icon} {displayedSkinVisual.multLabel} (TOTAL x{totalScoreMultiplier})
                       </span>
                     </div>
                     <div className="skin-live-bottom-bar">
                       <span>
-                        {currentSkinObj.name[lang]}
+                        {displayedSkinObj.name[lang]}
+                        {previewSkin ? (lang === 'es' ? ' (PROBANDO)' : ' (PREVIEW)') : ''}
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        {(currentSkinVisual.paletteSwatches || []).map((hex, i) => (
+                        {(displayedSkinVisual.paletteSwatches || []).map((hex, i) => (
                           <span
                             key={i}
                             className="palette-swatch-dot"
@@ -2457,21 +2519,20 @@ export default function App() {
                   </div>
 
                   <div className="items-scroll-list">
-                    {SKINS.map((sk) => {
+                    {/* BLOQUE 1: LAS 5 SKINS COMPRABLES EXCLUSIVAMENTE CON MONEDAS */}
+                    {SKINS.filter((sk) => !sk.isPro).map((sk) => {
                       const skinKey = resolveSkinKey(sk.id);
                       const isOwned =
                         unlockedSkins.includes(skinKey) ||
-                        unlockedSkins.includes(sk.legacyId) ||
-                        (sk.isVipOnly && vipPassActive);
-                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey;
+                        unlockedSkins.includes(sk.legacyId);
+                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
+                      const isPreviewing = previewSkin === skinKey;
                       const vis = sk.visual || SKIN_VISUALS[skinKey] || SKIN_VISUALS.urbano;
 
                       return (
                         <div
                           key={sk.id}
-                          className={`item-card ${isEquipped ? 'selected' : ''} ${
-                            sk.isPro ? 'vip-city-card' : ''
-                          }`}
+                          className={`item-card ${isEquipped || isPreviewing ? 'selected' : ''}`}
                         >
                           <div
                             className="item-icon-box"
@@ -2485,7 +2546,6 @@ export default function App() {
                           <div className="item-info">
                             <div className="item-title">{sk.name[lang]}</div>
 
-                            {/* PASO 3: Badge de color con la vista previa de su paleta de neón */}
                             <div className="skin-palette-preview-badge">
                               {(vis.paletteSwatches || []).map((swatchHex, sIdx) => (
                                 <span
@@ -2499,33 +2559,187 @@ export default function App() {
                               </span>
                             </div>
 
-                            <div
-                              className={`benefit-pill-tag ${sk.isPro ? 'pro' : ''}`}
-                            >
-                              {sk.badge[lang]}
-                            </div>
+                            <div className="benefit-pill-tag">{sk.badge[lang]}</div>
                             <div className="item-desc">{sk.desc[lang]}</div>
                           </div>
-                          <button
-                            className={`item-action-btn ${
-                              isEquipped
-                                ? 'equipped'
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+                            {!isOwned && (
+                              <button
+                                type="button"
+                                className="item-action-btn equip"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '4px 8px',
+                                  background: isPreviewing
+                                    ? 'linear-gradient(135deg, #00f2fe, #0284c7)'
+                                    : 'rgba(15, 23, 42, 0.85)',
+                                  color: isPreviewing ? '#04121d' : '#bae6fd',
+                                  border: '1px solid rgba(56, 189, 248, 0.55)',
+                                }}
+                                onClick={() => handlePreviewSkin(sk)}
+                              >
+                                {isPreviewing
+                                  ? lang === 'es'
+                                    ? '👁️ VIENDO'
+                                    : '👁️ VIEWING'
+                                  : lang === 'es'
+                                  ? '👁️ VISTA PREVIA'
+                                  : '👁️ PREVIEW'}
+                              </button>
+                            )}
+                            <button
+                              className={`item-action-btn ${
+                                isEquipped
+                                  ? 'equipped'
+                                  : isOwned
+                                  ? 'equip'
+                                  : 'buy-coins'
+                              }`}
+                              onClick={() => handleSelectOrBuySkin(sk)}
+                            >
+                              {isEquipped
+                                ? t.equipped
                                 : isOwned
-                                ? 'equip'
-                                : sk.isPro
-                                ? 'buy-gems'
-                                : 'buy-coins'
-                            }`}
-                            onClick={() => handleSelectOrBuySkin(sk)}
+                                ? t.equip
+                                : `🪙 ${sk.cost.toLocaleString()}`}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* BLOQUE 2: SEPARADOR Y 3 NUEVAS SKINS EXCLUSIVAS DE PAGA (DINERO REAL / PASE VIP) */}
+                    <h3
+                      className="sub-section-title"
+                      style={{
+                        color: '#fbbf24',
+                        borderColor: 'rgba(251, 191, 36, 0.45)',
+                        marginTop: 14,
+                      }}
+                    >
+                      👑{' '}
+                      {lang === 'es'
+                        ? 'ASPECTOS ÉLITE (EXCLUSIVOS PRO)'
+                        : 'ELITE SKINS (PRO EXCLUSIVE)'}
+                    </h3>
+
+                    {SKINS.filter((sk) => sk.isPro).map((sk) => {
+                      const skinKey = resolveSkinKey(sk.id);
+                      const isOwned =
+                        unlockedSkins.includes(skinKey) ||
+                        unlockedSkins.includes(sk.legacyId) ||
+                        (sk.isVipOnly && vipPassActive);
+                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
+                      const isPreviewing = previewSkin === skinKey;
+                      const vis = sk.visual || SKIN_VISUALS[skinKey] || SKIN_VISUALS.urbano;
+
+                      return (
+                        <div
+                          key={sk.id}
+                          className={`item-card vip-city-card ${
+                            isEquipped || isPreviewing ? 'selected' : ''
+                          }`}
+                        >
+                          <div
+                            className="item-icon-box"
+                            style={{
+                              background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
+                              border: `1.5px solid ${sk.trimColor}`,
+                              boxShadow: `0 0 12px ${sk.trimColor}55`,
+                            }}
                           >
-                            {isEquipped
-                              ? t.equipped
-                              : isOwned
-                              ? t.equip
-                              : sk.isPro
-                              ? `👑 ${sk.gemCost} 💎`
-                              : `🪙 ${sk.cost.toLocaleString()}`}
-                          </button>
+                            {sk.icon}
+                          </div>
+                          <div className="item-info">
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <span className="item-title">{sk.name[lang]}</span>
+                              <span
+                                style={{
+                                  fontSize: '0.58rem',
+                                  fontWeight: 900,
+                                  padding: '2px 6px',
+                                  borderRadius: 999,
+                                  background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                                  color: '#1e1b4b',
+                                  letterSpacing: '0.04em',
+                                }}
+                              >
+                                {sk.proTag ? sk.proTag[lang] : '👑 EXCLUSIVO PRO'}
+                              </span>
+                            </div>
+
+                            <div className="skin-palette-preview-badge">
+                              {(vis.paletteSwatches || []).map((swatchHex, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="palette-swatch-dot"
+                                  style={{ backgroundColor: swatchHex }}
+                                />
+                              ))}
+                              <span className="palette-label-text">
+                                {vis.paletteLabel?.[lang] || vis.multLabel} • {vis.multLabel}
+                              </span>
+                            </div>
+
+                            <div className="benefit-pill-tag pro">{sk.badge[lang]}</div>
+                            <div className="item-desc">{sk.desc[lang]}</div>
+                          </div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 5,
+                              alignItems: 'flex-end',
+                            }}
+                          >
+                            {!isOwned && (
+                              <button
+                                type="button"
+                                className="item-action-btn equip"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '4px 8px',
+                                  background: isPreviewing
+                                    ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
+                                    : 'rgba(15, 23, 42, 0.88)',
+                                  color: isPreviewing ? '#1e1b4b' : '#fde68a',
+                                  border: '1px solid rgba(251, 191, 36, 0.6)',
+                                }}
+                                onClick={() => handlePreviewSkin(sk)}
+                              >
+                                {isPreviewing
+                                  ? lang === 'es'
+                                    ? '👁️ VIENDO'
+                                    : '👁️ VIEWING'
+                                  : lang === 'es'
+                                  ? '👁️ VISTA PREVIA'
+                                  : '👁️ PREVIEW'}
+                              </button>
+                            )}
+                            <button
+                              className={`item-action-btn ${
+                                isEquipped
+                                  ? 'equipped'
+                                  : isOwned
+                                  ? 'equip'
+                                  : 'buy-gems'
+                              }`}
+                              onClick={() => handleSelectOrBuySkin(sk)}
+                            >
+                              {isEquipped
+                                ? t.equipped
+                                : isOwned
+                                ? t.equip
+                                : `👑 ${sk.usdPrice || `${sk.gemCost} 💎`}`}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}

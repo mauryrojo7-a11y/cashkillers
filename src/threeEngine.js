@@ -765,15 +765,140 @@ export function buildThreeWorld(mountEl) {
   shinobiAccGroup.add(katanaPivot);
   torsoSpineGroup.add(shinobiAccGroup);
 
-  // 6. LEYENDA DORADA VIP: Aura solar rotatoria + placas imperiales
+  // 6. RONIN IMPERIAL DORADO (x4): Hombreras samurái + placas doradas + DOS Katanas con empuñadura dorada cruzadas en la espalda
+  const roninGoldAccGroup = new THREE.Group();
+  roninGoldAccGroup.visible = false;
+
+  // Placas dorsales en oro brillante (#f59e0b)
+  for (let pIdx = 0; pIdx < 3; pIdx++) {
+    const plateMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24 - pIdx * 0.03, 0.055, 0.03),
+      goldAccentMat
+    );
+    plateMesh.position.set(0, 0.39 - pIdx * 0.1, 0.145);
+    roninGoldAccGroup.add(plateMesh);
+  }
+
+  // Hombreras samurái (Sode) laqueadas con bordes de oro
+  const sodeGeo = new THREE.BoxGeometry(0.16, 0.14, 0.2);
+  const leftSode = new THREE.Mesh(sodeGeo, darkArmorMat);
+  leftSode.position.set(-0.285, 0.45, 0);
+  leftSode.rotation.z = 0.28;
+  const leftSodeTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(0.17, 0.024, 0.21),
+    goldAccentMat
+  );
+  leftSodeTrim.position.set(0, 0.06, 0);
+  leftSode.add(leftSodeTrim);
+  roninGoldAccGroup.add(leftSode);
+
+  const rightSode = new THREE.Mesh(sodeGeo, darkArmorMat);
+  rightSode.position.set(0.285, 0.45, 0);
+  rightSode.rotation.z = -0.28;
+  const rightSodeTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(0.17, 0.024, 0.21),
+    goldAccentMat
+  );
+  rightSodeTrim.position.set(0, 0.06, 0);
+  rightSode.add(rightSodeTrim);
+  roninGoldAccGroup.add(rightSode);
+
+  // Dos Katanas cruzadas en X con empuñadura dorada
+  const buildGoldenKatana = (rotZ, offsetZ) => {
+    const kGroup = new THREE.Group();
+    kGroup.position.set(0, 0.3, offsetZ);
+    kGroup.rotation.z = rotZ;
+
+    const saya = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.015, 0.68, 12),
+      darkArmorMat
+    );
+    saya.position.set(0, -0.06, 0);
+    kGroup.add(saya);
+
+    const goldStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.65, 0.038),
+      goldAccentMat
+    );
+    goldStripe.position.set(0, -0.06, 0);
+    kGroup.add(goldStripe);
+
+    const tsuba = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.054, 0.054, 0.018, 16),
+      goldAccentMat
+    );
+    tsuba.position.set(0, 0.28, 0);
+    kGroup.add(tsuba);
+
+    const goldHilt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.021, 0.021, 0.23, 12),
+      goldAccentMat
+    );
+    goldHilt.position.set(0, 0.4, 0);
+    kGroup.add(goldHilt);
+
+    return kGroup;
+  };
+
+  roninGoldAccGroup.add(buildGoldenKatana(-0.62, 0.172));
+  roninGoldAccGroup.add(buildGoldenKatana(0.62, 0.192));
+  torsoSpineGroup.add(roninGoldAccGroup);
+
+  // 7. ESPECTRO CUÁNTICO (x5): Núcleo energético en la espalda + Halo holográfico alrededor del cuerpo
+  const quantumSpecterAccGroup = new THREE.Group();
+  quantumSpecterAccGroup.visible = false;
+
+  const quantumCoreMesh = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.085, 1),
+    cyanTacticalNeonMat
+  );
+  quantumCoreMesh.position.set(0, 0.3, 0.165);
+  quantumSpecterAccGroup.add(quantumCoreMesh);
+
+  const quantumCoreRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.13, 0.014, 10, 28),
+    whiteReflectiveMat
+  );
+  quantumCoreRing.position.set(0, 0.3, 0.165);
+  quantumSpecterAccGroup.add(quantumCoreRing);
+
+  const quantumHoloRingA = new THREE.Mesh(
+    new THREE.TorusGeometry(0.38, 0.014, 10, 36),
+    cyanTacticalNeonMat
+  );
+  quantumHoloRingA.position.set(0, 0.28, 0);
+  quantumHoloRingA.rotation.x = Math.PI * 0.35;
+  quantumSpecterAccGroup.add(quantumHoloRingA);
+
+  const quantumHoloRingB = new THREE.Mesh(
+    new THREE.TorusGeometry(0.42, 0.012, 10, 36),
+    whiteReflectiveMat
+  );
+  quantumHoloRingB.position.set(0, 0.28, 0);
+  quantumHoloRingB.rotation.y = Math.PI * 0.25;
+  quantumSpecterAccGroup.add(quantumHoloRingB);
+  torsoSpineGroup.add(quantumSpecterAccGroup);
+
+  // 8. LEYENDA DORADA INMORTAL (x8 VIP): Aura solar rotatoria + partículas doradas orbitales
   const goldenLegendAccGroup = new THREE.Group();
   goldenLegendAccGroup.visible = false;
   const solarAuraRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.32, 0.018, 12, 32),
+    new THREE.TorusGeometry(0.34, 0.02, 12, 36),
     goldAccentMat
   );
   solarAuraRing.position.set(0, 0.32, 0.16);
   goldenLegendAccGroup.add(solarAuraRing);
+
+  const solarParticlesGroup = new THREE.Group();
+  solarParticlesGroup.position.set(0, 0.3, 0);
+  const solarParticleGeo = new THREE.SphereGeometry(0.026, 8, 8);
+  for (let sp = 0; sp < 8; sp++) {
+    const ang = (sp / 8) * Math.PI * 2;
+    const pMesh = new THREE.Mesh(solarParticleGeo, goldAccentMat);
+    pMesh.position.set(Math.cos(ang) * 0.42, Math.sin(ang * 2) * 0.18, Math.sin(ang) * 0.32);
+    solarParticlesGroup.add(pMesh);
+  }
+  goldenLegendAccGroup.add(solarParticlesGroup);
   torsoSpineGroup.add(goldenLegendAccGroup);
 
   const shoulderCapGeo = new THREE.SphereGeometry(0.078, 16, 16);
@@ -1084,8 +1209,14 @@ export function buildThreeWorld(mountEl) {
     infiltradoAccGroup,
     ilusionistaAccGroup,
     shinobiAccGroup,
+    roninGoldAccGroup,
+    quantumSpecterAccGroup,
+    quantumCoreMesh,
+    quantumHoloRingA,
+    quantumHoloRingB,
     goldenLegendAccGroup,
     solarAuraRing,
+    solarParticlesGroup,
     tacticalVisorMesh,
     goldenCrownHalo,
     poleCoreMat,
@@ -1185,7 +1316,11 @@ export function updateAndRenderThreeScene(
   threeCtx.dorsalStripMat.color.setHex(isFever ? 0xfde047 : skinVis.dorsalHex);
 
   const ribbonLengthScale =
-    styleType === 'shinobi' ? 1.45 : styleType === 'ilusionista' ? 1.32 : 1.0;
+    styleType === 'shinobi' || styleType === 'immortal_legend'
+      ? 1.48
+      : styleType === 'ilusionista' || styleType === 'ronin_gold'
+      ? 1.32
+      : 1.0;
   threeCtx.ribbonPivot.scale.set(ribbonLengthScale, 1, 1);
 
   // Activar/desactivar grupos de accesorios 3D según el aspecto activo
@@ -1194,7 +1329,9 @@ export function updateAndRenderThreeScene(
   const isInfiltrado = styleType === 'infiltrado';
   const isIlusionista = styleType === 'ilusionista';
   const isShinobi = styleType === 'shinobi';
-  const isGolden = styleType === 'leyenda_dorada';
+  const isRoninGold = styleType === 'ronin_gold';
+  const isQuantumSpecter = styleType === 'quantum_specter';
+  const isGolden = styleType === 'immortal_legend' || styleType === 'leyenda_dorada';
 
   threeCtx.urbanoAccGroup.visible = isUrbano;
   threeCtx.leftLeg.cargoPocketMesh.visible = isUrbano;
@@ -1209,11 +1346,11 @@ export function updateAndRenderThreeScene(
   threeCtx.rightLeg.calfReflectiveMesh.visible = isNightRunner;
 
   threeCtx.infiltradoAccGroup.visible = isInfiltrado;
-  threeCtx.tacticalVisorMesh.visible = isInfiltrado;
-  threeCtx.leftLeg.tacticalKneeNeon.visible = isInfiltrado;
-  threeCtx.rightLeg.tacticalKneeNeon.visible = isInfiltrado;
-  threeCtx.leftLeg.tacticalHeelNeon.visible = isInfiltrado;
-  threeCtx.rightLeg.tacticalHeelNeon.visible = isInfiltrado;
+  threeCtx.tacticalVisorMesh.visible = isInfiltrado || isQuantumSpecter;
+  threeCtx.leftLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+  threeCtx.rightLeg.tacticalKneeNeon.visible = isInfiltrado || isQuantumSpecter;
+  threeCtx.leftLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
+  threeCtx.rightLeg.tacticalHeelNeon.visible = isInfiltrado || isQuantumSpecter;
 
   threeCtx.ilusionistaAccGroup.visible = isIlusionista;
 
@@ -1221,10 +1358,34 @@ export function updateAndRenderThreeScene(
   threeCtx.leftLeg.shinobiBootThruster.visible = isShinobi;
   threeCtx.rightLeg.shinobiBootThruster.visible = isShinobi;
 
+  threeCtx.roninGoldAccGroup.visible = isRoninGold;
+
+  threeCtx.quantumSpecterAccGroup.visible = isQuantumSpecter;
+  if (isQuantumSpecter) {
+    if (threeCtx.quantumCoreMesh) {
+      threeCtx.quantumCoreMesh.rotation.y = nowSec * 2.8;
+      threeCtx.quantumCoreMesh.rotation.z = nowSec * 1.9;
+    }
+    if (threeCtx.quantumHoloRingA) {
+      threeCtx.quantumHoloRingA.rotation.z = nowSec * 1.6;
+      threeCtx.quantumHoloRingA.rotation.x = Math.PI * 0.35 + Math.sin(nowSec * 2.1) * 0.22;
+    }
+    if (threeCtx.quantumHoloRingB) {
+      threeCtx.quantumHoloRingB.rotation.x = -nowSec * 1.4;
+      threeCtx.quantumHoloRingB.rotation.y = Math.PI * 0.25 + Math.cos(nowSec * 1.8) * 0.25;
+    }
+  }
+
   threeCtx.goldenLegendAccGroup.visible = isGolden;
   threeCtx.goldenCrownHalo.visible = isGolden;
-  if (isGolden && threeCtx.solarAuraRing) {
-    threeCtx.solarAuraRing.rotation.z = nowSec * 1.8;
+  if (isGolden) {
+    if (threeCtx.solarAuraRing) {
+      threeCtx.solarAuraRing.rotation.z = nowSec * 2.1;
+    }
+    if (threeCtx.solarParticlesGroup) {
+      threeCtx.solarParticlesGroup.rotation.y = nowSec * 2.4;
+      threeCtx.solarParticlesGroup.rotation.z = Math.sin(nowSec * 1.5) * 0.25;
+    }
   }
 
   // ============================================================================
@@ -1560,7 +1721,8 @@ export function updateAndRenderThreeScene(
     }
   }
 
-  const ringBonusScale = 1 + (poleCfg.catchRadiusBonus || 0);
+  const ringBonusScale =
+    1 + (poleCfg.catchRadiusBonus || 0) + (eng.skinObj?.catchWindowBonus || 0);
   threeCtx.leftReceiverRing.position.copy(lPos);
   threeCtx.rightReceiverRing.position.copy(rPos);
   threeCtx.leftReceiverMat.color.setHex(leftReady ? 0xfde047 : skinVis.rimHex);
