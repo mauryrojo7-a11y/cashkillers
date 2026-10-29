@@ -1,0 +1,15 @@
+{
+  "appId": "com.nomiresabajo.arcade",
+  "appName": "No Mires Abajo",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#050811",
+  "captureInput": true,
+  "webContentsDebuggingEnabled": false,
+  "android": {
+    "backgroundColor": "#050811",
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "allowMixedContent": false
+  }
+}

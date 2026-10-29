@@ -1,0 +1,26 @@
+{
+  "name": "NO MIRES ABAJO — Don't Look Down",
+  "short_name": "NO MIRES ABAJO",
+  "description": "Juego arcade móvil de equilibrio extremo y malabares rítmicos en 20 ciudades del mundo con Liga de Temporada.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050811",
+  "theme_color": "#050811",
+  "categories": ["games", "action", "arcade"],
+  "icons": [
+    {
+      "src": "./icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
