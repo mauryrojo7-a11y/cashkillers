@@ -30,9 +30,15 @@ function sanitizeCorruptedVisualStorage() {
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           const preserved = {
             lang: data.lang === 'en' ? 'en' : 'es',
-            level: Number.isFinite(Number(data.level)) ? Math.max(1, Math.floor(Number(data.level))) : 1,
-            coins: Number.isFinite(Number(data.coins)) ? Math.max(0, Math.floor(Number(data.coins))) : 1200,
-            gems: Number.isFinite(Number(data.gems)) ? Math.max(0, Math.floor(Number(data.gems))) : 60,
+            level: Number.isFinite(Number(data.level))
+              ? Math.max(1, Math.floor(Number(data.level)))
+              : 1,
+            coins: Number.isFinite(Number(data.coins))
+              ? Math.max(0, Math.floor(Number(data.coins)))
+              : 1200,
+            gems: Number.isFinite(Number(data.gems))
+              ? Math.max(0, Math.floor(Number(data.gems)))
+              : 60,
             bestScore: Number.isFinite(Number(data.bestScore))
               ? Math.max(0, Math.floor(Number(data.bestScore)))
               : 0,
@@ -72,13 +78,13 @@ function sanitizeCorruptedVisualStorage() {
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, errorMsg: '' };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error) {
     return {
       hasError: true,
-      errorMsg: error?.message || String(error || 'Unknown render error'),
+      error: error || new Error('Unknown render error'),
     };
   }
 
@@ -89,12 +95,17 @@ class ErrorBoundary extends React.Component {
 
   handleRestartInterface = () => {
     sanitizeCorruptedVisualStorage();
-    this.setState({ hasError: false, errorMsg: '' });
-    window.location.reload();
+    this.setState({ hasError: false, error: null });
+    window.location.href = window.location.pathname + '?reset=' + Date.now();
   };
 
   render() {
     if (this.state.hasError) {
+      const errString = this.state.error?.toString() || 'Unknown Error';
+      const errStack = this.state.error?.stack
+        ? this.state.error.stack.split('\n').slice(0, 4).join('\n')
+        : '';
+
       return (
         <div
           style={{
@@ -112,9 +123,9 @@ class ErrorBoundary extends React.Component {
         >
           <div
             style={{
-              maxWidth: '380px',
+              maxWidth: '400px',
               width: '100%',
-              background: 'rgba(15, 23, 42, 0.92)',
+              background: 'rgba(15, 23, 42, 0.94)',
               border: '1px solid rgba(56, 189, 248, 0.45)',
               borderRadius: '20px',
               padding: '24px 20px',
@@ -135,7 +146,7 @@ class ErrorBoundary extends React.Component {
             </h2>
             <p
               style={{
-                margin: '0 0 18px',
+                margin: '0 0 12px',
                 fontSize: '0.84rem',
                 lineHeight: 1.45,
                 color: '#cbd5e1',
@@ -144,6 +155,24 @@ class ErrorBoundary extends React.Component {
               Se reparó automáticamente una configuración visual antigua en caché. Tu progreso,
               nivel, monedas y perfil están intactos.
             </p>
+            <pre
+              style={{
+                margin: '0 0 16px',
+                padding: '10px',
+                borderRadius: '8px',
+                background: 'rgba(2, 6, 23, 0.85)',
+                border: '1px solid rgba(248, 113, 113, 0.35)',
+                color: '#fca5a5',
+                fontSize: '0.68rem',
+                textAlign: 'left',
+                overflowX: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {errString}
+              {errStack ? `\n${errStack}` : ''}
+            </pre>
             <button
               type="button"
               onClick={this.handleRestartInterface}

@@ -34,6 +34,22 @@ import {
   updateAndRenderThreeScene,
 } from './threeEngine';
 
+const asArray = (data) => (Array.isArray(data) ? data : Object.values(data || {}));
+
+const asText = (val, langKey = 'es', fallback = '') => {
+  if (val == null) return fallback;
+  if (typeof val === 'string' || typeof val === 'number') return String(val);
+  if (typeof val === 'object') {
+    const localized = val[langKey] ?? val.es ?? val.en ?? val.label ?? val.name ?? fallback;
+    return typeof localized === 'object' ? fallback : String(localized);
+  }
+  return String(val);
+};
+
+function THREE_LERP(a, b, t) {
+  return a + (b - a) * Math.max(0, Math.min(1, t));
+}
+
 function toSafeArray(val, fallback = []) {
   return Array.isArray(val) ? val.filter((item) => typeof item === 'string') : fallback;
 }
@@ -291,26 +307,25 @@ export default function App() {
   });
 
   const t = I18N[lang] || I18N.es;
-  const activeVipCity = VIP_CITIES.find((vc) => vc.id === activeVipCityId) || null;
+  const activeVipCity = asArray(VIP_CITIES).find((vc) => vc.id === activeVipCityId) || null;
   const cfg = getLevelConfig(level, activeVipCity);
   const currentSkinObj = getSafeSkin(equippedSkin);
   const currentSkinVisual = getSafeSkin(equippedSkin);
   const displayedSkinObj = getSafeSkin(previewSkin || equippedSkin);
   const displayedSkinVisual = getSafeSkin(previewSkin || equippedSkin);
-  const currentPoleObj = BALANCE_POLES.find((p) => p.id === equippedPole) || BALANCE_POLES[0];
-  const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
+  const currentPoleObj =
+    asArray(BALANCE_POLES).find((p) => p.id === equippedPole) || asArray(BALANCE_POLES)[0];
+  const currentPropObj =
+    asArray(JUGGLE_PROPS).find((p) => p.id === equippedProp) || asArray(JUGGLE_PROPS)[0];
 
   // PASO 3: Aplicación real del multiplicador del Aspecto (`x1`, `x1.2`, `x1.5`, `x2`, `x3`, `x4`, `x5`, `x8`)
   // sobre Puntos, Monedas y LP ganados en partida
-  const permCoinMult = (Array.isArray(ownedMultipliers) ? ownedMultipliers : []).reduce(
-    (acc, id) => {
-      const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
-      return m ? Math.max(acc, m.coinMult ?? 1) : acc;
-    },
-    1
-  );
-  const permLpMult = (Array.isArray(ownedMultipliers) ? ownedMultipliers : []).reduce((acc, id) => {
-    const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
+  const permCoinMult = asArray(ownedMultipliers).reduce((acc, id) => {
+    const m = asArray(PERMANENT_MULTIPLIERS).find((item) => item.id === id);
+    return m ? Math.max(acc, m.coinMult ?? 1) : acc;
+  }, 1);
+  const permLpMult = asArray(ownedMultipliers).reduce((acc, id) => {
+    const m = asArray(PERMANENT_MULTIPLIERS).find((item) => item.id === id);
     return m ? Math.max(acc, m.lpMult ?? 1) : acc;
   }, 1);
 
@@ -1299,10 +1314,6 @@ export default function App() {
     pushFloatingPopup,
   ]);
 
-  function THREE_LERP(a, b, t) {
-    return a + (b - a) * Math.max(0, Math.min(1, t));
-  }
-
   // ============================================================================
   // REWARDED ADS & MONETIZATION ACTIONS
   // ============================================================================
@@ -1879,7 +1890,7 @@ export default function App() {
                     : '2. SELECT YOUR COUNTRY / FLAG'}
                 </label>
                 <div className="onboarding-country-grid">
-                  {COUNTRIES.map((c) => {
+                  {asArray(COUNTRIES).map((c) => {
                     const selected = onboardingCountryInput === c.code;
                     return (
                       <button
@@ -1888,9 +1899,9 @@ export default function App() {
                         className={`onboarding-country-chip ${selected ? 'selected' : ''}`}
                         onClick={() => setOnboardingCountryInput(c.code)}
                       >
-                        <span className="country-chip-flag">{c.flag}</span>
-                        <span className="country-chip-code">{c.code}</span>
-                        <span className="country-chip-name">{c.name}</span>
+                        <span className="country-chip-flag">{String(c.flag || '🏳️')}</span>
+                        <span className="country-chip-code">{String(c.code || 'AR')}</span>
+                        <span className="country-chip-name">{asText(c.name, lang, 'País')}</span>
                       </button>
                     );
                   })}
@@ -1958,7 +1969,7 @@ export default function App() {
                 >
                   {t.vipCitiesTitle}
                 </div>
-                {VIP_CITIES.map((vc) => {
+                {asArray(VIP_CITIES).map((vc) => {
                   const isUnlocked = vipPassActive || unlockedVipCities.includes(vc.id);
                   const isCurrentVip = activeVipCityId === vc.id;
                   return (
@@ -1978,12 +1989,12 @@ export default function App() {
                       </div>
                       <div className="item-info">
                         <div className="item-title" style={{ color: '#fde047' }}>
-                          👑 {vc.name[lang]}
+                          👑 {asText(vc.name, lang)}
                         </div>
                         <div className="benefit-pill-tag pro">
                           x{vc.rewardMult} 🪙/LP • +{vc.gemBonus} 💎 POR CRUCE
                         </div>
-                        <div className="item-desc">{vc.desc[lang]}</div>
+                        <div className="item-desc">{asText(vc.desc, lang)}</div>
                       </div>
                       <button
                         className={`item-action-btn ${
@@ -2017,7 +2028,7 @@ export default function App() {
                     ? '🏙️ 20 CIUDADES DEL TOUR MUNDIAL (MONUMENTOS 3D)'
                     : '🏙️ 20 WORLD TOUR CITIES (3D LANDMARKS)'}
                 </div>
-                {CITIES.map((city, idx) => {
+                {asArray(CITIES).map((city, idx) => {
                   const isUnlocked = idx <= highestUnlockedCityIdx;
                   const isCurrent = !activeVipCityId && cfg.cityIndex === idx;
                   const startLvl = idx * 5 + 1;
@@ -2037,15 +2048,15 @@ export default function App() {
                       </div>
                       <div className="item-info">
                         <div className="item-title">
-                          {idx + 1}. {city.name[lang]}
+                          {idx + 1}. {asText(city.name, lang)}
                         </div>
                         <div className="benefit-pill-tag">
-                          🗿 {city.monumentName?.[lang] || city.weatherLabel?.[lang]}
+                          🗿 {asText(city.monumentName || city.weatherLabel, lang)}
                         </div>
                         <div className="item-desc">
                           {lang === 'es'
-                            ? `Niveles ${startLvl} al ${endLvl} • ${city.weatherLabel?.es}`
-                            : `Levels ${startLvl} to ${endLvl} • ${city.weatherLabel?.en}`}
+                            ? `Niveles ${startLvl} al ${endLvl} • ${asText(city.weatherLabel, 'es')}`
+                            : `Levels ${startLvl} to ${endLvl} • ${asText(city.weatherLabel, 'en')}`}
                         </div>
                       </div>
                       <button
@@ -2408,15 +2419,15 @@ export default function App() {
                   <div className="items-scroll-list">
                     {armorySubTab === 'upgrades' && (
                       <>
-                        {GEAR_ITEMS.map((gItem) => {
-                          const lvl = gearLevels[gItem.id] || 0;
+                        {asArray(GEAR_ITEMS).map((gItem) => {
+                          const lvl = gearLevels?.[gItem.id] || 0;
                           const costInfo = getArmoryUpgradeCost(lvl);
                           return (
                             <div key={gItem.id} className="item-card">
                               <div className="item-icon-box">{gItem.icon}</div>
                               <div className="item-info">
                                 <div className="item-title">
-                                  {gItem.name[lang]}{' '}
+                                  {asText(gItem.name, lang)}{' '}
                                   <span className="lvl-pill">Nv. {lvl}/10</span>
                                 </div>
                                 <div
@@ -2428,9 +2439,9 @@ export default function App() {
                                     ? lang === 'es'
                                       ? '👑 TRAMO ÉLITE PRO (NV. 6 A 10)'
                                       : '👑 PRO ELITE TIER (LVL 6 TO 10)'
-                                    : gItem.statLabel[lang]}
+                                    : asText(gItem.statLabel, lang)}
                                 </div>
-                                <div className="item-desc">{gItem.desc[lang]}</div>
+                                <div className="item-desc">{asText(gItem.desc, lang)}</div>
                                 <div className="armory-level-bar">
                                   {Array.from({ length: 10 }).map((_, idx) => (
                                     <span
@@ -2466,7 +2477,7 @@ export default function App() {
                         })}
 
                         <h3 className="sub-section-title">🎪 {t.propsTitle}</h3>
-                        {JUGGLE_PROPS.map((prop) => {
+                        {asArray(JUGGLE_PROPS).map((prop) => {
                           const isOwned = unlockedProps.includes(prop.id);
                           const isEquipped = equippedProp === prop.id;
                           return (
@@ -2476,7 +2487,7 @@ export default function App() {
                             >
                               <div className="item-icon-box">{prop.icon}</div>
                               <div className="item-info">
-                                <div className="item-title">{prop.name[lang]}</div>
+                                <div className="item-title">{asText(prop.name, lang)}</div>
                                 <div className="item-desc">
                                   Multiplicador Base x{prop.mult}
                                 </div>
@@ -2508,7 +2519,7 @@ export default function App() {
                     )}
 
                     {armorySubTab === 'poles' &&
-                      BALANCE_POLES.map((pole) => {
+                      asArray(BALANCE_POLES).map((pole) => {
                         const isOwned =
                           unlockedPoles.includes(pole.id) ||
                           (pole.isVipOnly && vipPassActive);
@@ -2522,15 +2533,15 @@ export default function App() {
                           >
                             <div className="item-icon-box">{pole.icon}</div>
                             <div className="item-info">
-                              <div className="item-title">{pole.name[lang]}</div>
+                              <div className="item-title">{asText(pole.name, lang)}</div>
                               <div
                                 className={`benefit-pill-tag ${
                                   pole.isPro ? 'pro' : ''
                                 }`}
                               >
-                                {pole.badge[lang]}
+                                {asText(pole.badge, lang)}
                               </div>
-                              <div className="item-desc">{pole.desc[lang]}</div>
+                              <div className="item-desc">{asText(pole.desc, lang)}</div>
                             </div>
                             <button
                               className={`item-action-btn ${
@@ -2557,7 +2568,7 @@ export default function App() {
                       })}
 
                     {armorySubTab === 'multipliers' &&
-                      PERMANENT_MULTIPLIERS.map((mItem) => {
+                      asArray(PERMANENT_MULTIPLIERS).map((mItem) => {
                         const isOwned =
                           ownedMultipliers.includes(mItem.id) ||
                           (mItem.isVipOnly && vipPassActive);
@@ -2570,15 +2581,15 @@ export default function App() {
                           >
                             <div className="item-icon-box">{mItem.icon}</div>
                             <div className="item-info">
-                              <div className="item-title">{mItem.name[lang]}</div>
+                              <div className="item-title">{asText(mItem.name, lang)}</div>
                               <div
                                 className={`benefit-pill-tag ${
                                   mItem.isPro ? 'pro' : ''
                                 }`}
                               >
-                                {mItem.badge[lang]}
+                                {asText(mItem.badge, lang)}
                               </div>
-                              <div className="item-desc">{mItem.desc[lang]}</div>
+                              <div className="item-desc">{asText(mItem.desc, lang)}</div>
                             </div>
                             <button
                               className={`item-action-btn ${
@@ -2646,93 +2657,102 @@ export default function App() {
 
                   <div className="items-scroll-list">
                     {/* BLOQUE 1: LAS 5 SKINS COMPRABLES EXCLUSIVAMENTE CON MONEDAS */}
-                    {SKINS.filter((sk) => !sk.isPro).map((sk) => {
-                      const skinKey = resolveSkinKey(sk.id);
-                      const isOwned =
-                        unlockedSkins.includes(skinKey) ||
-                        unlockedSkins.includes(sk.legacyId);
-                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
-                      const isPreviewing = previewSkin === skinKey;
-                      const vis = sk.visual || SKIN_VISUALS[skinKey] || SKIN_VISUALS.urbano;
+                    {asArray(SKINS_CATALOG)
+                      .filter((sk) => !sk.isPro)
+                      .map((sk) => {
+                        const skinKey = resolveSkinKey(sk.id);
+                        const isOwned =
+                          unlockedSkins.includes(skinKey) ||
+                          unlockedSkins.includes(sk.legacyId);
+                        const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
+                        const isPreviewing = previewSkin === skinKey;
+                        const vis = getSafeSkin(skinKey);
 
-                      return (
-                        <div
-                          key={sk.id}
-                          className={`item-card ${isEquipped || isPreviewing ? 'selected' : ''}`}
-                        >
+                        return (
                           <div
-                            className="item-icon-box"
-                            style={{
-                              background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
-                              border: `1.5px solid ${sk.trimColor}`,
-                            }}
+                            key={sk.id}
+                            className={`item-card ${isEquipped || isPreviewing ? 'selected' : ''}`}
                           >
-                            {sk.icon}
-                          </div>
-                          <div className="item-info">
-                            <div className="item-title">{sk.name[lang]}</div>
-
-                            <div className="skin-palette-preview-badge">
-                              {(vis.paletteSwatches || []).map((swatchHex, sIdx) => (
-                                <span
-                                  key={sIdx}
-                                  className="palette-swatch-dot"
-                                  style={{ backgroundColor: swatchHex }}
-                                />
-                              ))}
-                              <span className="palette-label-text">
-                                {vis.paletteLabel?.[lang] || vis.multLabel} • {vis.multLabel}
-                              </span>
-                            </div>
-
-                            <div className="benefit-pill-tag">{sk.badge[lang]}</div>
-                            <div className="item-desc">{sk.desc[lang]}</div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
-                            {!isEquipped && (
-                              <button
-                                type="button"
-                                className="item-action-btn equip"
-                                style={{
-                                  fontSize: '0.62rem',
-                                  padding: '4px 8px',
-                                  background: isPreviewing
-                                    ? 'linear-gradient(135deg, #00f2fe, #0284c7)'
-                                    : 'rgba(15, 23, 42, 0.85)',
-                                  color: isPreviewing ? '#04121d' : '#bae6fd',
-                                  border: '1px solid rgba(56, 189, 248, 0.55)',
-                                }}
-                                onClick={() => handlePreviewSkin(sk)}
-                              >
-                                {isPreviewing
-                                  ? lang === 'es'
-                                    ? '👁️ PROBANDO'
-                                    : '👁️ TRYING'
-                                  : lang === 'es'
-                                  ? '👁️ PROBAR'
-                                  : '👁️ TRY'}
-                              </button>
-                            )}
-                            <button
-                              className={`item-action-btn ${
-                                isEquipped
-                                  ? 'equipped'
-                                  : isOwned
-                                  ? 'equip'
-                                  : 'buy-coins'
-                              }`}
-                              onClick={() => handleSelectOrBuySkin(sk)}
+                            <div
+                              className="item-icon-box"
+                              style={{
+                                background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
+                                border: `1.5px solid ${sk.trimColor}`,
+                              }}
                             >
-                              {isEquipped
-                                ? t.equipped
-                                : isOwned
-                                ? t.equip
-                                : `🪙 ${(sk.price ?? sk.cost ?? 0).toLocaleString()}`}
-                            </button>
+                              {sk.icon}
+                            </div>
+                            <div className="item-info">
+                              <div className="item-title">{asText(sk.name, lang)}</div>
+
+                              <div className="skin-palette-preview-badge">
+                                {asArray(vis.paletteSwatches).map((swatchHex, sIdx) => (
+                                  <span
+                                    key={sIdx}
+                                    className="palette-swatch-dot"
+                                    style={{ backgroundColor: swatchHex }}
+                                  />
+                                ))}
+                                <span className="palette-label-text">
+                                  {asText(vis.paletteLabel, lang, vis.multLabel)} • {vis.multLabel}
+                                </span>
+                              </div>
+
+                              <div className="benefit-pill-tag">{asText(sk.badge, lang)}</div>
+                              <div className="item-desc">{asText(sk.desc, lang)}</div>
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 5,
+                                alignItems: 'flex-end',
+                              }}
+                            >
+                              {!isEquipped && (
+                                <button
+                                  type="button"
+                                  className="item-action-btn equip"
+                                  style={{
+                                    fontSize: '0.62rem',
+                                    padding: '4px 8px',
+                                    background: isPreviewing
+                                      ? 'linear-gradient(135deg, #00f2fe, #0284c7)'
+                                      : 'rgba(15, 23, 42, 0.85)',
+                                    color: isPreviewing ? '#04121d' : '#bae6fd',
+                                    border: '1px solid rgba(56, 189, 248, 0.55)',
+                                  }}
+                                  onClick={() => handlePreviewSkin(sk)}
+                                >
+                                  {isPreviewing
+                                    ? lang === 'es'
+                                      ? '👁️ PROBANDO'
+                                      : '👁️ TRYING'
+                                    : lang === 'es'
+                                    ? '👁️ PROBAR'
+                                    : '👁️ TRY'}
+                                </button>
+                              )}
+                              <button
+                                className={`item-action-btn ${
+                                  isEquipped
+                                    ? 'equipped'
+                                    : isOwned
+                                    ? 'equip'
+                                    : 'buy-coins'
+                                }`}
+                                onClick={() => handleSelectOrBuySkin(sk)}
+                              >
+                                {isEquipped
+                                  ? t.equipped
+                                  : isOwned
+                                  ? t.equip
+                                  : `🪙 ${(sk.price ?? sk.cost ?? 0).toLocaleString()}`}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
 
                     {/* BLOQUE 2: SEPARADOR Y 3 NUEVAS SKINS EXCLUSIVAS DE PAGA (DINERO REAL / PASE VIP) */}
                     <h3
@@ -2749,129 +2769,131 @@ export default function App() {
                         : 'ELITE SKINS (PRO EXCLUSIVE)'}
                     </h3>
 
-                    {SKINS.filter((sk) => sk.isPro).map((sk) => {
-                      const skinKey = resolveSkinKey(sk.id);
-                      const isOwned =
-                        unlockedSkins.includes(skinKey) ||
-                        unlockedSkins.includes(sk.legacyId) ||
-                        (sk.isVipOnly && vipPassActive);
-                      const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
-                      const isPreviewing = previewSkin === skinKey;
-                      const vis = sk.visual || SKIN_VISUALS[skinKey] || SKIN_VISUALS.urbano;
+                    {asArray(SKINS_CATALOG)
+                      .filter((sk) => sk.isPro)
+                      .map((sk) => {
+                        const skinKey = resolveSkinKey(sk.id);
+                        const isOwned =
+                          unlockedSkins.includes(skinKey) ||
+                          unlockedSkins.includes(sk.legacyId) ||
+                          (sk.isVipOnly && vipPassActive);
+                        const isEquipped = resolveSkinKey(equippedSkin) === skinKey && !previewSkin;
+                        const isPreviewing = previewSkin === skinKey;
+                        const vis = getSafeSkin(skinKey);
 
-                      return (
-                        <div
-                          key={sk.id}
-                          className={`item-card vip-city-card ${
-                            isEquipped || isPreviewing ? 'selected' : ''
-                          }`}
-                        >
+                        return (
                           <div
-                            className="item-icon-box"
-                            style={{
-                              background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
-                              border: `1.5px solid ${sk.trimColor}`,
-                              boxShadow: `0 0 12px ${sk.trimColor}55`,
-                            }}
+                            key={sk.id}
+                            className={`item-card vip-city-card ${
+                              isEquipped || isPreviewing ? 'selected' : ''
+                            }`}
                           >
-                            {sk.icon}
-                          </div>
-                          <div className="item-info">
+                            <div
+                              className="item-icon-box"
+                              style={{
+                                background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
+                                border: `1.5px solid ${sk.trimColor}`,
+                                boxShadow: `0 0 12px ${sk.trimColor}55`,
+                              }}
+                            >
+                              {sk.icon}
+                            </div>
+                            <div className="item-info">
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <span className="item-title">{asText(sk.name, lang)}</span>
+                                <span
+                                  style={{
+                                    fontSize: '0.58rem',
+                                    fontWeight: 900,
+                                    padding: '2px 6px',
+                                    borderRadius: 999,
+                                    background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+                                    color: '#1e1b4b',
+                                    letterSpacing: '0.04em',
+                                  }}
+                                >
+                                  {sk.proTag ? asText(sk.proTag, lang) : '👑 EXCLUSIVO PRO'}
+                                </span>
+                              </div>
+
+                              <div className="skin-palette-preview-badge">
+                                {asArray(vis.paletteSwatches).map((swatchHex, sIdx) => (
+                                  <span
+                                    key={sIdx}
+                                    className="palette-swatch-dot"
+                                    style={{ backgroundColor: swatchHex }}
+                                  />
+                                ))}
+                                <span className="palette-label-text">
+                                  {asText(vis.paletteLabel, lang, vis.multLabel)} • {vis.multLabel}
+                                </span>
+                              </div>
+
+                              <div className="benefit-pill-tag pro">{asText(sk.badge, lang)}</div>
+                              <div className="item-desc">{asText(sk.desc, lang)}</div>
+                            </div>
                             <div
                               style={{
                                 display: 'flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                flexWrap: 'wrap',
+                                flexDirection: 'column',
+                                gap: 5,
+                                alignItems: 'flex-end',
                               }}
                             >
-                              <span className="item-title">{sk.name[lang]}</span>
-                              <span
-                                style={{
-                                  fontSize: '0.58rem',
-                                  fontWeight: 900,
-                                  padding: '2px 6px',
-                                  borderRadius: 999,
-                                  background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
-                                  color: '#1e1b4b',
-                                  letterSpacing: '0.04em',
-                                }}
-                              >
-                                {sk.proTag ? sk.proTag[lang] : '👑 EXCLUSIVO PRO'}
-                              </span>
-                            </div>
-
-                            <div className="skin-palette-preview-badge">
-                              {(vis.paletteSwatches || []).map((swatchHex, sIdx) => (
-                                <span
-                                  key={sIdx}
-                                  className="palette-swatch-dot"
-                                  style={{ backgroundColor: swatchHex }}
-                                />
-                              ))}
-                              <span className="palette-label-text">
-                                {vis.paletteLabel?.[lang] || vis.multLabel} • {vis.multLabel}
-                              </span>
-                            </div>
-
-                            <div className="benefit-pill-tag pro">{sk.badge[lang]}</div>
-                            <div className="item-desc">{sk.desc[lang]}</div>
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 5,
-                              alignItems: 'flex-end',
-                            }}
-                          >
-                            {!isEquipped && (
+                              {!isEquipped && (
+                                <button
+                                  type="button"
+                                  className="item-action-btn equip"
+                                  style={{
+                                    fontSize: '0.62rem',
+                                    padding: '4px 8px',
+                                    background: isPreviewing
+                                      ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
+                                      : 'rgba(15, 23, 42, 0.88)',
+                                    color: isPreviewing ? '#1e1b4b' : '#fde68a',
+                                    border: '1px solid rgba(251, 191, 36, 0.6)',
+                                  }}
+                                  onClick={() => handlePreviewSkin(sk)}
+                                >
+                                  {isPreviewing
+                                    ? lang === 'es'
+                                      ? '👁️ PROBANDO'
+                                      : '👁️ TRYING'
+                                    : lang === 'es'
+                                    ? '👁️ PROBAR'
+                                    : '👁️ TRY'}
+                                </button>
+                              )}
                               <button
-                                type="button"
-                                className="item-action-btn equip"
-                                style={{
-                                  fontSize: '0.62rem',
-                                  padding: '4px 8px',
-                                  background: isPreviewing
-                                    ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
-                                    : 'rgba(15, 23, 42, 0.88)',
-                                  color: isPreviewing ? '#1e1b4b' : '#fde68a',
-                                  border: '1px solid rgba(251, 191, 36, 0.6)',
-                                }}
-                                onClick={() => handlePreviewSkin(sk)}
+                                className={`item-action-btn ${
+                                  isEquipped
+                                    ? 'equipped'
+                                    : isOwned
+                                    ? 'equip'
+                                    : 'buy-gems'
+                                }`}
+                                onClick={() => handleSelectOrBuySkin(sk)}
                               >
-                                {isPreviewing
-                                  ? lang === 'es'
-                                    ? '👁️ PROBANDO'
-                                    : '👁️ TRYING'
-                                  : lang === 'es'
-                                  ? '👁️ PROBAR'
-                                  : '👁️ TRY'}
-                              </button>
-                            )}
-                            <button
-                              className={`item-action-btn ${
-                                isEquipped
-                                  ? 'equipped'
+                                {isEquipped
+                                  ? t.equipped
                                   : isOwned
-                                  ? 'equip'
-                                  : 'buy-gems'
-                              }`}
-                              onClick={() => handleSelectOrBuySkin(sk)}
-                            >
-                              {isEquipped
-                                ? t.equipped
-                                : isOwned
-                                ? t.equip
-                                : `👑 ${sk.priceUSD || sk.usdPrice || `${sk.gemCost} 💎`}`}
-                            </button>
+                                  ? t.equip
+                                  : `👑 ${sk.priceUSD || sk.usdPrice || `${sk.gemCost} 💎`}`}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
 
                     <h3 className="sub-section-title">{t.polesTitle}</h3>
-                    {BALANCE_POLES.map((pole) => {
+                    {asArray(BALANCE_POLES).map((pole) => {
                       const isOwned =
                         unlockedPoles.includes(pole.id) ||
                         (pole.isVipOnly && vipPassActive);
@@ -2885,13 +2907,13 @@ export default function App() {
                         >
                           <div className="item-icon-box">{pole.icon}</div>
                           <div className="item-info">
-                            <div className="item-title">{pole.name[lang]}</div>
+                            <div className="item-title">{asText(pole.name, lang)}</div>
                             <div
                               className={`benefit-pill-tag ${pole.isPro ? 'pro' : ''}`}
                             >
-                              {pole.badge[lang]}
+                              {asText(pole.badge, lang)}
                             </div>
-                            <div className="item-desc">{pole.desc[lang]}</div>
+                            <div className="item-desc">{asText(pole.desc, lang)}</div>
                           </div>
                           <button
                             className={`item-action-btn ${
@@ -2959,9 +2981,9 @@ export default function App() {
 
                   <div className="items-scroll-list">
                     <div className="leaderboard-box">
-                      {leaderboard.map((row, idx) => (
+                      {asArray(leaderboard).map((row, idx) => (
                         <div
-                          key={row.id}
+                          key={row.id || idx}
                           className={`leader-row ${row.isPlayer ? 'is-player' : ''}`}
                         >
                           <span className="leader-pos">
@@ -2973,9 +2995,9 @@ export default function App() {
                               ? '🥉'
                               : `#${idx + 1}`}
                           </span>
-                          <span className="leader-flag">{row.flag}</span>
+                          <span className="leader-flag">{String(row.flag || '🏳️')}</span>
                           <span className="leader-name">
-                            {row.name}
+                            {String(row.name || 'Equilibrista')}
                             {row.isPlayer
                               ? lang === 'es'
                                 ? ' (TÚ)'
@@ -2983,14 +3005,14 @@ export default function App() {
                               : ''}
                           </span>
                           <span className="leader-lp">
-                            {(row.lp ?? row.score ?? 0).toLocaleString()} LP
+                            {Number(row.lp ?? row.score ?? 0).toLocaleString()} LP
                           </span>
                         </div>
                       ))}
                     </div>
 
                     <h3 className="sub-section-title">🎁 {t.seasonPrizes}</h3>
-                    {SEASON_REWARD_TIERS.map((tier) => {
+                    {asArray(SEASON_REWARD_TIERS).map((tier) => {
                       const claimed = claimedTiers.includes(tier.id);
                       const canClaim = !claimed && leaguePoints >= tier.requiredLp;
                       return (
@@ -2998,7 +3020,7 @@ export default function App() {
                           <div className="item-icon-box">{tier.icon}</div>
                           <div className="item-info">
                             <div className="item-title">
-                              {tier.rankLabel} • {tier.title[lang]}
+                              {tier.rankLabel} • {asText(tier.title, lang)}
                             </div>
                             <div className="item-desc">
                               {tier.requiredLp.toLocaleString()} LP → +{tier.gemsReward}{' '}
@@ -3036,12 +3058,12 @@ export default function App() {
                   <p className="panel-sub">{t.storeSubtitle}</p>
 
                   <div className="items-scroll-list">
-                    {STORE_BUNDLES.map((b) => (
+                    {asArray(STORE_BUNDLES).map((b) => (
                       <div key={b.id} className="vip-bundle-card">
                         <div className="vip-bundle-header">
                           <span className="vip-icon">{b.icon}</span>
                           <div>
-                            <div className="vip-title">{b.name[lang]}</div>
+                            <div className="vip-title">{asText(b.name, lang)}</div>
                             <div className="vip-rewards-inline">
                               +{b.gems} 💎 • +{b.coins.toLocaleString()} 🪙
                             </div>
@@ -3056,15 +3078,15 @@ export default function App() {
                           </button>
                         </div>
                         <ul className="vip-perk-list">
-                          {b.perks[lang].map((p, i) => (
-                            <li key={i}>✓ {p}</li>
+                          {asArray(b.perks?.[lang] || b.perks?.es).map((p, i) => (
+                            <li key={i}>✓ {String(p)}</li>
                           ))}
                         </ul>
                       </div>
                     ))}
 
                     <h3 className="sub-section-title">{t.multipliersTitle}</h3>
-                    {PERMANENT_MULTIPLIERS.map((mItem) => {
+                    {asArray(PERMANENT_MULTIPLIERS).map((mItem) => {
                       const isOwned =
                         ownedMultipliers.includes(mItem.id) ||
                         (mItem.isVipOnly && vipPassActive);
@@ -3077,13 +3099,13 @@ export default function App() {
                         >
                           <div className="item-icon-box">{mItem.icon}</div>
                           <div className="item-info">
-                            <div className="item-title">{mItem.name[lang]}</div>
+                            <div className="item-title">{asText(mItem.name, lang)}</div>
                             <div
                               className={`benefit-pill-tag ${mItem.isPro ? 'pro' : ''}`}
                             >
-                              {mItem.badge[lang]}
+                              {asText(mItem.badge, lang)}
                             </div>
-                            <div className="item-desc">{mItem.desc[lang]}</div>
+                            <div className="item-desc">{asText(mItem.desc, lang)}</div>
                           </div>
                           <button
                             className={`item-action-btn ${
@@ -3117,35 +3139,35 @@ export default function App() {
                 onClick={() => setActiveTab('home')}
               >
                 <span className="nav-ic">🏙️</span>
-                <span>{t.tabs.home}</span>
+                <span>{t.tabs?.home || (lang === 'es' ? 'Inicio' : 'Home')}</span>
               </button>
               <button
                 className={`nav-tab-btn ${activeTab === 'armory' ? 'active' : ''}`}
                 onClick={() => setActiveTab('armory')}
               >
                 <span className="nav-ic">⚖️</span>
-                <span>{t.tabs.armory}</span>
+                <span>{t.tabs?.armory || (lang === 'es' ? 'Armería' : 'Armory')}</span>
               </button>
               <button
                 className={`nav-tab-btn ${activeTab === 'skins' ? 'active' : ''}`}
                 onClick={() => setActiveTab('skins')}
               >
                 <span className="nav-ic">🎭</span>
-                <span>{t.tabs.skins}</span>
+                <span>{t.tabs?.skins || (lang === 'es' ? 'Aspectos' : 'Skins')}</span>
               </button>
               <button
                 className={`nav-tab-btn ${activeTab === 'league' ? 'active' : ''}`}
                 onClick={() => setActiveTab('league')}
               >
                 <span className="nav-ic">🏆</span>
-                <span>{t.tabs.league}</span>
+                <span>{t.tabs?.league || (lang === 'es' ? 'Liga' : 'League')}</span>
               </button>
               <button
                 className={`nav-tab-btn ${activeTab === 'store' ? 'active' : ''}`}
                 onClick={() => setActiveTab('store')}
               >
                 <span className="nav-ic">💎</span>
-                <span>{t.tabs.store}</span>
+                <span>{t.tabs?.store || (lang === 'es' ? 'Tienda' : 'Shop')}</span>
               </button>
             </nav>
           </div>
