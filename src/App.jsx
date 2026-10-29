@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import {
+  COUNTRIES_LIST,
+  getCountryOption,
   CITIES,
   SKINS,
   JUGGLE_PROPS,
@@ -15,7 +17,90 @@ import {
 } from './gameData';
 
 const STORAGE_KEY = 'NO_MIRES_ABAJO_PLAYSTORE_V3';
+const ONLINE_LEADERBOARD_KEY = 'nma_online_leaderboard_v1';
 const CRITICAL_ANGLE_RAD = 0.82; // ~47 degrees critical fall angle
+
+// ============================================================================
+// UTILIDADES DE PERFIL OBLIGATORIO Y SINCRONIZACIÓN EN TIEMPO REAL CON LIGA ONLINE
+// ============================================================================
+function isValidPlayerName(name) {
+  if (typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  if (
+    !trimmed ||
+    trimmed === 'TÚ (Equilibrista)' ||
+    trimmed === 'YOU (Tightrope Pro)' ||
+    trimmed === 'YOU (Tightrope Walker)'
+  ) {
+    return false;
+  }
+  const nonSpaceChars = trimmed.replace(/\s+/g, '');
+  return nonSpaceChars.length >= 2 && trimmed.length <= 16;
+}
+
+function getOrCreatePlayerId() {
+  try {
+    const existing = localStorage.getItem('nma_player_id');
+    if (existing && existing.trim().length > 0) {
+      return existing.trim();
+    }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'nma_' +
+          Array.from({ length: 16 }, () =>
+            Math.floor(Math.random() * 16).toString(16)
+          ).join('') +
+          '_' +
+          Date.now().toString(16);
+    localStorage.setItem('nma_player_id', generated);
+    return generated;
+  } catch {
+    return 'nma_' + Date.now().toString(16);
+  }
+}
+
+function loadInitialOnboardingState(savedProfile) {
+  try {
+    const completed = localStorage.getItem('nma_profile_completed') === 'true';
+    const rawName =
+      localStorage.getItem('nma_player_name') || savedProfile?.playerName || '';
+    const rawCountry =
+      localStorage.getItem('nma_player_country') ||
+      savedProfile?.playerCountry ||
+      'AR';
+    const existingId =
+      localStorage.getItem('nma_player_id') || savedProfile?.playerId || '';
+
+    const valid = completed && isValidPlayerName(rawName);
+    const countryOpt = getCountryOption(rawCountry);
+
+    return {
+      needsOnboarding: !valid,
+      playerId: existingId,
+      playerName: valid ? rawName.trim() : '',
+      playerCountry: countryOpt.code,
+    };
+  } catch {
+    return {
+      needsOnboarding: true,
+      playerId: '',
+      playerName: '',
+      playerCountry: 'AR',
+    };
+  }
+}
+
+function loadOnlineLeaderboardRegistry() {
+  try {
+    const raw = localStorage.getItem(ONLINE_LEADERBOARD_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 // ============================================================================
 // GENERADORES DE TEXTURAS Y SHADERS "VECTOR" (EJECUTADOS 1 SOLA VEZ AL INICIAR)
@@ -922,12 +1007,10 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   eng.smoothNeckComp += (targetNeckComp - eng.smoothNeckComp) * lerpMed;
 
   if (eng.fallSlowMo) {
-    // 2.1: Estado `falling`: El acróbata se desprende del cable y cae en el eje -Y girando hacia el abismo
     threeCtx.acrobatGroup.position.set(eng.fallPosX, eng.fallPosY, playerZ);
     threeCtx.acrobatGroup.rotation.z = -angle * 1.35;
     threeCtx.acrobatGroup.rotation.x = eng.fallTumbleX;
   } else if (eng.grappleRescueTimer > 0) {
-    // 2.2: Rescate físico con Gancho Salvavidas impulsando al acróbata de regreso a (0, 0, playerZ)
     const rescueRatio = eng.grappleRescueTimer / 0.45;
     const curX = eng.rescueStartX * rescueRatio;
     const curY = eng.rescueStartY * rescueRatio;
@@ -1107,7 +1190,7 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.leftReceiverRing.scale.set(lScale, lScale, lScale);
   threeCtx.rightReceiverRing.scale.set(rScale, rScale, rScale);
 
-  // Parábola 3D de las Esferas Doradas Incandescentes con Estela de Luz (intensificada en Modo Frenesí)
+  // Parábola 3D de las Esferas Doradas Incandescentes con Estela de Luz
   for (let i = 0; i < 4; i++) {
     const b = eng.jugglePool[i];
     const orbObj = threeCtx.orbMeshes[i];
@@ -1196,7 +1279,6 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   );
 
   if (eng.fallSlowMo) {
-    // 2.1: La cámara se inclina hacia abajo siguiendo la caída del acróbata al abismo
     threeCtx.camera.lookAt(threeCtx.acrobatGroup.position);
   } else {
     threeCtx.camera.lookAt(
@@ -1241,6 +1323,7 @@ function createInitialPools(initialSpeed = 0.72) {
 
 export default function App() {
   const saved = loadSavedProfile();
+  const initialOnboarding = loadInitialOnboardingState(saved);
 
   const [lang, setLang] = useState(saved?.lang || 'es');
   const [soundOn, setSoundOn] = useState(saved?.soundOn ?? true);
@@ -1249,6 +1332,23 @@ export default function App() {
   const [coins, setCoins] = useState(saved?.coins ?? 450);
   const [gems, setGems] = useState(saved?.gems ?? 80);
   const [leaguePoints, setLeaguePoints] = useState(saved?.leaguePoints ?? 1250);
+
+  // Estados de Perfil de Jugador y Modal de Registro Inicial Obligatorio
+  const [playerId, setPlayerId] = useState(initialOnboarding.playerId);
+  const [playerName, setPlayerName] = useState(initialOnboarding.playerName);
+  const [playerCountry, setPlayerCountry] = useState(initialOnboarding.playerCountry || 'AR');
+  const [showOnboardingModal, setShowOnboardingModal] = useState(
+    initialOnboarding.needsOnboarding
+  );
+  const [onboardingNameInput, setOnboardingNameInput] = useState(
+    initialOnboarding.playerName || ''
+  );
+  const [onboardingCountryInput, setOnboardingCountryInput] = useState(
+    initialOnboarding.playerCountry || 'AR'
+  );
+  const [onlineRegistry, setOnlineRegistry] = useState(() =>
+    loadOnlineLeaderboardRegistry()
+  );
 
   const [gearLevels, setGearLevels] = useState(
     saved?.gearLevels || { pole: 1, boots: 1, gloves: 1 }
@@ -1298,12 +1398,188 @@ export default function App() {
   const mountRef = useRef(null);
   const threeRef = useRef(null);
   const needleRef = useRef(null);
+  const onboardingInputRef = useRef(null);
 
   const t = I18N[lang] || I18N.es;
   const levelCfg = getLevelConfig(currentLevel);
   const currentCity = levelCfg.city;
   const currentSkinObj = SKINS.find((s) => s.id === equippedSkin) || SKINS[0];
   const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
+
+  const playerCountryObj = getCountryOption(playerCountry);
+  const playerFlag = playerCountryObj.flag;
+  const displayPlayerName = isValidPlayerName(playerName)
+    ? playerName
+    : t.youLabel;
+
+  // Sincronización en tiempo real del perfil con el Ranking Online de la Liga de Temporada
+  const syncPlayerScore = useCallback(
+    (overrideProfile = {}) => {
+      try {
+        const finalId = overrideProfile.id || playerId || getOrCreatePlayerId();
+        const finalName = (overrideProfile.name ?? playerName ?? '').trim();
+        const finalCountry = overrideProfile.country || playerCountry || 'AR';
+        const finalLp =
+          typeof overrideProfile.lp === 'number' ? overrideProfile.lp : leaguePoints;
+        const finalMaxLvl =
+          typeof overrideProfile.level === 'number'
+            ? overrideProfile.level
+            : maxUnlockedLevel;
+
+        if (!isValidPlayerName(finalName)) return;
+
+        const countryInfo = getCountryOption(finalCountry);
+        const record = {
+          id: finalId,
+          name: finalName,
+          countryCode: countryInfo.code,
+          country: countryInfo.flag,
+          flag: countryInfo.flag,
+          lp: finalLp,
+          maxLevel: finalMaxLvl,
+          badge: '⭐',
+          updatedAt: Date.now(),
+        };
+
+        const currentList = loadOnlineLeaderboardRegistry();
+        const filtered = currentList.filter((item) => item && item.id !== finalId);
+        const updatedList = [...filtered, record];
+        localStorage.setItem(ONLINE_LEADERBOARD_KEY, JSON.stringify(updatedList));
+        setOnlineRegistry(updatedList);
+
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('nma_live_league_sync');
+          bc.postMessage({ type: 'PLAYER_SYNC', payload: record });
+          bc.close();
+        }
+      } catch {
+        // Ignorar errores de almacenamiento o canal en modo restringido
+      }
+    },
+    [playerId, playerName, playerCountry, leaguePoints, maxUnlockedLevel]
+  );
+
+  // PASO 1: Detección de primer ingreso al montar `src/App.jsx`
+  useEffect(() => {
+    try {
+      const profileCompleted =
+        localStorage.getItem('nma_profile_completed') === 'true';
+      const storedName = localStorage.getItem('nma_player_name') || '';
+      const storedCountry = localStorage.getItem('nma_player_country') || 'AR';
+
+      if (!profileCompleted || !isValidPlayerName(storedName)) {
+        setShowOnboardingModal(true);
+      } else {
+        const uid = getOrCreatePlayerId();
+        setPlayerId(uid);
+        setPlayerName(storedName.trim());
+        setPlayerCountry(getCountryOption(storedCountry).code);
+        setShowOnboardingModal(false);
+        syncPlayerScore({
+          id: uid,
+          name: storedName.trim(),
+          country: getCountryOption(storedCountry).code,
+          lp: leaguePoints,
+          level: maxUnlockedLevel,
+        });
+      }
+    } catch {
+      setShowOnboardingModal(true);
+    }
+  }, []);
+
+  // Sincronizar automáticamente con la tabla online cada vez que el jugador gana LP o sube de nivel
+  useEffect(() => {
+    if (isValidPlayerName(playerName) && !showOnboardingModal) {
+      syncPlayerScore({
+        id: playerId,
+        name: playerName,
+        country: playerCountry,
+        lp: leaguePoints,
+        level: maxUnlockedLevel,
+      });
+    }
+  }, [leaguePoints, maxUnlockedLevel, playerName, playerCountry, playerId, showOnboardingModal, syncPlayerScore]);
+
+  // Escuchar actualizaciones en tiempo real entre pestañas si hubiera BroadcastChannel
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+    const bc = new BroadcastChannel('nma_live_league_sync');
+    bc.onmessage = () => {
+      setOnlineRegistry(loadOnlineLeaderboardRegistry());
+    };
+    return () => bc.close();
+  }, []);
+
+  // Foco automático en el input del modal de registro al abrirse
+  useEffect(() => {
+    if (showOnboardingModal && !isInitialLoading) {
+      const focusTimer = setTimeout(() => {
+        if (onboardingInputRef.current) {
+          onboardingInputRef.current.focus();
+        }
+      }, 80);
+      return () => clearTimeout(focusTimer);
+    }
+    return undefined;
+  }, [showOnboardingModal, isInitialLoading]);
+
+  const openProfileEditor = useCallback(() => {
+    soundEngine.init();
+    setOnboardingNameInput(isValidPlayerName(playerName) ? playerName : '');
+    setOnboardingCountryInput(playerCountry || 'AR');
+    setShowOnboardingModal(true);
+  }, [playerName, playerCountry]);
+
+  const nonSpaceOnboardingChars = onboardingNameInput.replace(/\s+/g, '').length;
+  const isOnboardingValid =
+    nonSpaceOnboardingChars >= 2 &&
+    onboardingNameInput.trim().length <= 16 &&
+    isValidPlayerName(onboardingNameInput);
+
+  const handleSaveOnboardingProfile = useCallback(
+    (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!isOnboardingValid) return;
+
+      soundEngine.init();
+      const cleanName = onboardingNameInput.trim().slice(0, 16);
+      const countryOpt = getCountryOption(onboardingCountryInput || 'AR');
+      const uid = getOrCreatePlayerId();
+
+      try {
+        localStorage.setItem('nma_player_id', uid);
+        localStorage.setItem('nma_player_name', cleanName);
+        localStorage.setItem('nma_player_country', countryOpt.code);
+        localStorage.setItem('nma_profile_completed', 'true');
+      } catch {
+        // Ignorar cuota de localStorage
+      }
+
+      setPlayerId(uid);
+      setPlayerName(cleanName);
+      setPlayerCountry(countryOpt.code);
+      setShowOnboardingModal(false);
+
+      syncPlayerScore({
+        id: uid,
+        name: cleanName,
+        country: countryOpt.code,
+        lp: leaguePoints,
+        level: maxUnlockedLevel,
+      });
+
+      soundEngine.playVictory();
+    },
+    [
+      isOnboardingValid,
+      onboardingNameInput,
+      onboardingCountryInput,
+      leaguePoints,
+      maxUnlockedLevel,
+      syncPlayerScore,
+    ]
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1369,7 +1645,6 @@ export default function App() {
       dynamicFov: 58,
       dynamicCamDist: 6.2,
       dynamicCamY: 3.38,
-      // Estados Bloque 2 y Bloque 3 (Caída 3D, Gancho, Salvada al Límite y Modo Frenesí)
       fallSlowMo: false,
       slowMoTimer: 1.25,
       fallPosX: 0,
@@ -1413,6 +1688,9 @@ export default function App() {
         JSON.stringify({
           lang,
           soundOn,
+          playerId,
+          playerName,
+          playerCountry,
           currentLevel,
           maxUnlockedLevel,
           coins,
@@ -1431,6 +1709,9 @@ export default function App() {
   }, [
     lang,
     soundOn,
+    playerId,
+    playerName,
+    playerCountry,
     currentLevel,
     maxUnlockedLevel,
     coins,
@@ -1566,10 +1847,14 @@ export default function App() {
   );
 
   const startRun = useCallback(() => {
+    if (showOnboardingModal || !isValidPlayerName(playerName)) {
+      setShowOnboardingModal(true);
+      return;
+    }
     soundEngine.init();
     soundEngine.playCatchSound(2, false);
     resetEngineForLevel(currentLevel, 'PLAYING');
-  }, [currentLevel, resetEngineForLevel]);
+  }, [currentLevel, resetEngineForLevel, showOnboardingModal, playerName]);
 
   const handleAddJuggleObject = useCallback(() => {
     soundEngine.init();
@@ -1643,10 +1928,8 @@ export default function App() {
             setGems((g) => g + 1);
           }
 
-          // Bloque 1.1: Notas pentatónicas + octava brillante y vibración de 12ms en captura perfecta
           soundEngine.playCatchSound(eng.combo, isPerfect);
 
-          // Bloque 3.3: Feedback Flotante de Captura en ese lado (`¡PERFECTO! x4`, `¡BIEN! x2`)
           setHandPopup({
             id: Date.now() + Math.random(),
             side: handChar === 'L' ? 'left' : 'right',
@@ -1731,6 +2014,14 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e) => {
+      // No interceptar teclas cuando el usuario está escribiendo su Nombre/Apodo en el modal
+      if (
+        showOnboardingModal ||
+        e.target?.tagName === 'INPUT' ||
+        e.target?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
       if (e.repeat) return;
       const key = e.key.toLowerCase();
       const eng = engineRef.current;
@@ -1759,6 +2050,13 @@ export default function App() {
     };
 
     const onKeyUp = (e) => {
+      if (
+        showOnboardingModal ||
+        e.target?.tagName === 'INPUT' ||
+        e.target?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
       const key = e.key.toLowerCase();
       const eng = engineRef.current;
       if (key === 'arrowleft' || key === 'a') {
@@ -1774,7 +2072,13 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [attemptHandCatch, handleAddJuggleObject, handleGrappleSave, startRun]);
+  }, [
+    showOnboardingModal,
+    attemptHandCatch,
+    handleAddJuggleObject,
+    handleGrappleSave,
+    startRun,
+  ]);
 
   // ============================================================================
   // BUCLE PRINCIPAL 60/90/120Hz DE FÍSICA DELTATIME + RENDERIZADO 3D THREE.JS
@@ -1823,7 +2127,6 @@ export default function App() {
 
         if (eng.gameStatus === 'PLAYING') {
           if (eng.fallSlowMo) {
-            // BLOQUE 2.1: 1.2 segundos de caída cinemática 3D en el eje -Y hacia el abismo
             eng.slowMoTimer -= dt;
             eng.fallVelocityY -= 16.8 * dt;
             eng.fallPosY += eng.fallVelocityY * dt;
@@ -1839,7 +2142,6 @@ export default function App() {
               setGameStatus('GAMEOVER');
             }
           } else {
-            // Ráfagas de Viento Cruzado (Desde Nivel 4) anunciadas 1s antes con sonido filtrado
             eng.windTimer += dt;
             if (eng.level >= 4 && eng.windTimer >= eng.windChangeFreq - 1.0) {
               if (!eng.windWarningActive) {
@@ -1891,13 +2193,11 @@ export default function App() {
             const windTorque = eng.windCurrent * shoesFactor * 1.65;
 
             if (eng.immunityTimer > 0) {
-              // Durante los 1.5s de inmunidad tras el rescate con gancho, estabilizar suavemente
               eng.angularVelocity = 0;
               eng.angle *= Math.pow(0.82, dt * 60);
             } else {
               eng.angularVelocity +=
                 (gravityTorque + windTorque + stepSway + thumbTorque) * dt;
-              // Bloque 3.2: En Modo Frenesí (Combo >= 10) la amortiguación de giro mejora un 15%
               const dampingBase = eng.isFeverMode ? 0.905 : 0.92;
               eng.angularVelocity *= Math.pow(dampingBase, dt * 60);
               eng.angle += eng.angularVelocity * dt;
@@ -1907,12 +2207,10 @@ export default function App() {
 
             const absAngle = Math.abs(eng.angle);
 
-            // BLOQUE 1.2: Cuando la inclinación supera el 75% del ángulo límite, latido grave 65Hz + vibración 20ms
             if (absAngle > CRITICAL_ANGLE_RAD * 0.75) {
               soundEngine.playHeartbeatIfDanger(timestamp);
             }
 
-            // BLOQUE 3.1: Mecánica de "Salvada al Límite" (Near-Miss Bonus)
             if (absAngle > CRITICAL_ANGLE_RAD * 0.78) {
               eng.criticalTiltDuration += dt;
               if (eng.criticalTiltDuration >= 0.35) {
@@ -1967,7 +2265,6 @@ export default function App() {
               }
             }
 
-            // Iniciar secuencia cinemática 3D de caída al vacío (1.2s) cuando supera el ángulo límite
             if (absAngle >= CRITICAL_ANGLE_RAD && eng.immunityTimer <= 0) {
               eng.fallSlowMo = true;
               eng.slowMoTimer = 1.25;
@@ -2134,12 +2431,19 @@ export default function App() {
     setTimeout(() => setShopNotice(''), 2500);
   };
 
+  // Construcción del Ranking Online de Liga de Temporada combinando rivales + perfiles sincronizados + jugador activo
+  const externalRegisteredPlayers = onlineRegistry.filter(
+    (entry) => entry && entry.id && entry.id !== (playerId || 'player')
+  );
+
   const leagueStandings = [
     ...SEASON_RIVALS,
+    ...externalRegisteredPlayers,
     {
-      id: 'player',
-      name: lang === 'es' ? 'TÚ (Equilibrista)' : 'YOU (Tightrope Pro)',
-      country: currentCity.flag,
+      id: playerId || 'player',
+      name: displayPlayerName,
+      country: playerFlag,
+      countryCode: playerCountryObj.code,
       lp: leaguePoints,
       badge: '⭐',
       isPlayer: true,
@@ -2219,6 +2523,120 @@ export default function App() {
         </div>
       )}
 
+      {/* ==================== PASO 2: PANTALLA DE BIENVENIDA Y REGISTRO OBLIGATORIA (`z-index: 9999`) ==================== */}
+      {!isInitialLoading && showOnboardingModal && (
+        <div
+          className="onboarding-priority-backdrop backdrop-blur-xl bg-slate-950/90"
+          style={{ zIndex: 9999 }}
+        >
+          <form
+            className="onboarding-modal-card"
+            onSubmit={handleSaveOnboardingProfile}
+          >
+            <div>
+              <h2 className="onboarding-title">{t.onboardingTitle}</h2>
+              <p className="onboarding-subtitle">{t.onboardingSubtitle}</p>
+            </div>
+
+            {/* Conservación visible de progreso LP / Monedas / Gemas del jugador */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '10px',
+                padding: '6px 10px',
+                borderRadius: '10px',
+                background: 'rgba(15, 23, 42, 0.85)',
+                border: '1px solid rgba(250, 204, 21, 0.38)',
+                fontSize: '0.76rem',
+                fontWeight: 800,
+                color: '#fde047',
+              }}
+            >
+              <span>🏆 {leaguePoints} LP</span>
+              <span>•</span>
+              <span>📍 Nv. {maxUnlockedLevel}/100</span>
+              <span>•</span>
+              <span>🪙 {coins}</span>
+              <span>•</span>
+              <span>💎 {gems}</span>
+            </div>
+
+            {/* Input de texto para NOMBRE O APODO */}
+            <div className="onboarding-field-group">
+              <div className="onboarding-label-row">
+                <label htmlFor="nma-nickname-input">{t.onboardingNameLabel}</label>
+                <span
+                  style={{
+                    color: isOnboardingValid ? '#4ade80' : '#fde047',
+                  }}
+                >
+                  {nonSpaceOnboardingChars}/16
+                </span>
+              </div>
+              <input
+                id="nma-nickname-input"
+                ref={onboardingInputRef}
+                type="text"
+                className="onboarding-name-input"
+                placeholder={t.onboardingNamePlaceholder}
+                value={onboardingNameInput}
+                maxLength={16}
+                autoFocus
+                autoComplete="off"
+                onChange={(e) => setOnboardingNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && isOnboardingValid) {
+                    handleSaveOnboardingProfile(e);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Selector visual de PAÍS / BANDERA en grilla con AR (Argentina) preseleccionado por defecto */}
+            <div className="onboarding-field-group">
+              <div className="onboarding-label-row">
+                <span>{t.onboardingCountryLabel}</span>
+                <span style={{ color: '#fde047' }}>
+                  {getCountryOption(onboardingCountryInput).flag}{' '}
+                  {getCountryOption(onboardingCountryInput).code}
+                </span>
+              </div>
+              <div className="onboarding-country-grid">
+                {COUNTRIES_LIST.map((cItem) => {
+                  const isSelected = onboardingCountryInput === cItem.code;
+                  return (
+                    <button
+                      key={cItem.code}
+                      type="button"
+                      className={`onboarding-country-btn ${
+                        isSelected ? 'selected' : ''
+                      }`}
+                      onClick={() => {
+                        soundEngine.init();
+                        soundEngine.playCatchSound(3, false);
+                        setOnboardingCountryInput(cItem.code);
+                      }}
+                    >
+                      <span>{cItem.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Botón principal de confirmación */}
+            <button
+              type="submit"
+              className="onboarding-submit-btn"
+              disabled={!isOnboardingValid}
+            >
+              {t.onboardingSaveCta}
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* ==================== BARRA DE MENÚ PRINCIPAL (OCULTA DURANTE LA PARTIDA ACTIVA) ==================== */}
       {gameStatus !== 'PLAYING' && (
         <header className="top-utility-bar">
@@ -2242,6 +2660,18 @@ export default function App() {
 
           <div className="nav-pills-row">
             <div className="nav-pills-group">
+              {/* PASO 3: Insignia activa del jugador `[Bandera] [Nombre] (✏️)` con edición rápida */}
+              <button
+                type="button"
+                className="mini-pill player-identity-pill"
+                title={t.editProfileTooltip}
+                onClick={openProfileEditor}
+              >
+                <span>{playerFlag}</span>
+                <span className="player-identity-name">{displayPlayerName}</span>
+                <span>✏️</span>
+              </button>
+
               <button
                 type="button"
                 className="mini-pill gold"
@@ -2261,16 +2691,6 @@ export default function App() {
                 }}
               >
                 ⚙️ {t.armoryBtn}
-              </button>
-              <button
-                type="button"
-                className="mini-pill"
-                onClick={() => {
-                  engineRef.current.paused = true;
-                  setActiveModal('SKINS');
-                }}
-              >
-                🧥 {t.skinsBtn}
               </button>
             </div>
 
@@ -2327,7 +2747,6 @@ export default function App() {
                   <span>x{hudState.multiplier}</span>
                 </div>
 
-                {/* Botón de Mute directo en el HUD superior */}
                 <button
                   type="button"
                   className="compact-pause-btn"
@@ -2372,21 +2791,18 @@ export default function App() {
             </div>
           </section>
 
-          {/* Alerta 1 segundo antes de ráfaga de viento cruzado (Desde Nivel 4) */}
           {hudState.windWarningActive && (
             <div className="wind-gust-alert-pill">
               <span>{t.windGustAlert}</span>
             </div>
           )}
 
-          {/* Bloque 3.1: Texto Flotante Dinámico de "Salvada al Límite" (+100 PTS, +5 Monedas) */}
           {nearMissBanner > 0 && (
             <div key={nearMissBanner} className="near-miss-floater">
               {t.nearMissPopup}
             </div>
           )}
 
-          {/* Bloque 3.3: Feedback Flotante Efímero de Captura en Mano Izquierda / Derecha */}
           {handPopup && (
             <div
               key={handPopup.id}
@@ -2482,8 +2898,12 @@ export default function App() {
                     color: '#67e8f9',
                     fontWeight: 800,
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfileEditor();
+                  }}
                 >
-                  🎁 Cofres Épicos →
+                  {playerFlag} {displayPlayerName} (✏️)
                 </span>
               </div>
               <div
@@ -2582,7 +3002,6 @@ export default function App() {
           </div>
 
           <div className="vector-minimal-hud">
-            {/* Indicador translúcido ultrafino esquina inferior izquierda */}
             <div
               className={`vector-corner-indicator left ${
                 hudState.leftPressed ? 'pressed' : ''
@@ -2592,7 +3011,6 @@ export default function App() {
               <div className="vector-corner-line" />
             </div>
 
-            {/* Micro-píldoras centrales discretas (+1 esfera y salvada de emergencia con Gancho 3D) */}
             <div className="vector-center-micro-bar">
               {hudState.juggleCount < 4 && (
                 <button
@@ -2619,7 +3037,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Indicador translúcido ultrafino esquina inferior derecha */}
             <div
               className={`vector-corner-indicator right ${
                 hudState.rightPressed ? 'pressed' : ''
@@ -2664,13 +3081,27 @@ export default function App() {
               </div>
               <div
                 style={{
-                  fontSize: '1.45rem',
+                  fontSize: '1.35rem',
                   fontWeight: 900,
                   color: '#ffffff',
                   marginTop: '2px',
                 }}
               >
                 #{playerRank} — {leaguePoints} {t.leaguePointsShort}
+              </div>
+              {/* PASO 3: Insignia activa del jugador dentro de la Liga de Temporada */}
+              <div style={{ marginTop: '6px' }}>
+                <button
+                  type="button"
+                  className="mini-pill cyan"
+                  onClick={openProfileEditor}
+                >
+                  <span>{playerFlag}</span>
+                  <span style={{ fontWeight: 900, color: '#fde047' }}>
+                    {displayPlayerName}
+                  </span>
+                  <span>(✏️)</span>
+                </button>
               </div>
             </div>
 
@@ -2702,13 +3133,17 @@ export default function App() {
                 <div
                   key={entry.id}
                   className={`league-rank-row ${entry.isPlayer ? 'is-player' : ''}`}
+                  onClick={entry.isPlayer ? openProfileEditor : undefined}
+                  style={entry.isPlayer ? { cursor: 'pointer' } : undefined}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontWeight: 900, color: '#fde047', width: '24px' }}>
                       #{idx + 1}
                     </span>
                     <span>{entry.country}</span>
-                    <span style={{ fontWeight: 800 }}>{entry.name}</span>
+                    <span style={{ fontWeight: 800 }}>
+                      {entry.name} {entry.isPlayer ? '(✏️)' : ''}
+                    </span>
                   </div>
                   <div style={{ fontWeight: 900, color: '#38bdf8' }}>
                     {entry.lp} LP {entry.badge}

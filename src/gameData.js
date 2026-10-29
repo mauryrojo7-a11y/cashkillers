@@ -1,5 +1,30 @@
 export const STORAGE_KEY = 'no_mires_abajo_playstore_v3';
 
+export const COUNTRIES_LIST = [
+  { code: 'AR', flag: '🇦🇷', name: 'Argentina', label: '🇦🇷 AR (Argentina)' },
+  { code: 'UY', flag: '🇺🇾', name: 'Uruguay', label: '🇺🇾 UY (Uruguay)' },
+  { code: 'CL', flag: '🇨🇱', name: 'Chile', label: '🇨🇱 CL (Chile)' },
+  { code: 'BR', flag: '🇧🇷', name: 'Brasil', label: '🇧🇷 BR (Brasil)' },
+  { code: 'PY', flag: '🇵🇾', name: 'Paraguay', label: '🇵🇾 PY (Paraguay)' },
+  { code: 'BO', flag: '🇧🇴', name: 'Bolivia', label: '🇧🇴 BO (Bolivia)' },
+  { code: 'PE', flag: '🇵🇪', name: 'Perú', label: '🇵🇪 PE (Perú)' },
+  { code: 'CO', flag: '🇨🇴', name: 'Colombia', label: '🇨🇴 CO (Colombia)' },
+  { code: 'MX', flag: '🇲🇽', name: 'México', label: '🇲🇽 MX (México)' },
+  { code: 'ES', flag: '🇪🇸', name: 'España', label: '🇪🇸 ES (España)' },
+  { code: 'US', flag: '🇺🇸', name: 'EE.UU.', label: '🇺🇸 US (EE.UU.)' },
+  { code: 'IT', flag: '🇮🇹', name: 'Italia', label: '🇮🇹 IT (Italia)' },
+  { code: 'GB', flag: '🇬🇧', name: 'Reino Unido', label: '🇬🇧 GB (Reino Unido)' },
+  { code: 'JP', flag: '🇯🇵', name: 'Japón', label: '🇯🇵 JP (Japón)' },
+];
+
+export function getCountryOption(codeOrFlag) {
+  if (!codeOrFlag) return COUNTRIES_LIST[0];
+  const found = COUNTRIES_LIST.find(
+    (c) => c.code === codeOrFlag || c.flag === codeOrFlag
+  );
+  return found || COUNTRIES_LIST[0];
+}
+
 export const CITIES = [
   {
     index: 0,
@@ -672,6 +697,14 @@ export const I18N = {
     feverModeBadge: '🔥 MODO FRENESÍ x2',
     perfectCatchLabel: '¡PERFECTO!',
     goodCatchLabel: '¡BIEN!',
+    onboardingTitle: '⚡ CREÁ TU PERFIL DE EQUILIBRISTA',
+    onboardingSubtitle:
+      'Elegí tu Nombre/Apodo y Bandera para registrarte en vivo en el Ranking Online de la Liga de Temporada.',
+    onboardingNameLabel: 'NOMBRE O APODO (2 A 16 CARACTERES)',
+    onboardingNamePlaceholder: 'Ej: Mauricio, Franco_99...',
+    onboardingCountryLabel: 'PAÍS / BANDERA',
+    onboardingSaveCta: 'GUARDAR Y ENTRAR AL JUEGO',
+    editProfileTooltip: 'Editar nombre o bandera',
     lossModalHeader:
       '🚨 ¡PERDISTE EL EJE DE GRAVEDAD EN EL METRO {meter}m DE {city} (NIVEL {level})!',
     lossModalSub: 'Cámara lenta activada ({seconds}s antes de caer al abismo)...',
@@ -780,6 +813,14 @@ export const I18N = {
     feverModeBadge: '🔥 FEVER MODE x2',
     perfectCatchLabel: 'PERFECT!',
     goodCatchLabel: 'NICE!',
+    onboardingTitle: '⚡ CREATE YOUR TIGHTROPE PROFILE',
+    onboardingSubtitle:
+      'Choose your Nickname & Country Flag to register live on the Season League Online Leaderboard.',
+    onboardingNameLabel: 'NICKNAME (2 TO 16 CHARACTERS)',
+    onboardingNamePlaceholder: 'Ex: Mauricio, Franco_99...',
+    onboardingCountryLabel: 'COUNTRY / FLAG',
+    onboardingSaveCta: 'SAVE & ENTER THE GAME',
+    editProfileTooltip: 'Edit nickname or flag',
     lossModalHeader:
       '🚨 YOU LOST YOUR CENTER OF GRAVITY AT METER {meter}m OF {city} (LEVEL {level})!',
     lossModalSub: 'Slow-motion activated ({seconds}s before falling into the abyss)...',
@@ -1028,12 +1069,6 @@ class ProceduralAudio {
     }
   }
 
-  /**
-   * 1.1: Notas de Malabar por Combo (`playCatchSound(combo, isPerfect)`):
-   * Oscilador armónico (`triangle` + `sine` con envolvente ADSR rápida de 0.18s)
-   * sobre escala pentatónica [523.25, 587.33, 659.25, 783.99, 880.0, 1046.50] Hz.
-   * Si es captura PERFECTA, suma un armónico en la octava superior y vibra 12ms.
-   */
   playCatchSound(combo = 1, isPerfect = false) {
     if (isPerfect && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(12);
@@ -1049,7 +1084,6 @@ class ProceduralAudio {
     const octaveShift = combo >= 12 ? 1.25 : 1.0;
     const freq = PENTATONIC_SCALE[noteIdx] * octaveShift;
 
-    // Oscilador principal (triangle) + sub-armónico cálido (sine) con ADSR de 0.18s
     const oscTri = this.ctx.createOscillator();
     const oscSine = this.ctx.createOscillator();
     const mainGain = this.ctx.createGain();
@@ -1073,7 +1107,6 @@ class ProceduralAudio {
     oscTri.stop(now + 0.19);
     oscSine.stop(now + 0.19);
 
-    // Armónico brillante en la octava superior si fue captura PERFECTA
     if (isPerfect) {
       const octOsc = this.ctx.createOscillator();
       const octGain = this.ctx.createGain();
@@ -1094,10 +1127,6 @@ class ProceduralAudio {
     this.playCatchSound(combo, isPerfect);
   }
 
-  /**
-   * 1.2a: Sonido de Ráfaga de Viento (`⚠️ RÁFAGA DE VIENTO`):
-   * Generador de ruido blanco filtrado (`BiquadFilterNode` bandpass) que simula el silbido del viento en altura.
-   */
   playWindGust() {
     if (this.muted) return;
     this.init();
@@ -1127,10 +1156,6 @@ class ProceduralAudio {
     src.stop(now + 1.0);
   }
 
-  /**
-   * 1.2b: Alerta de Inclinación (> 75% del ángulo límite):
-   * Emite un latido grave sutil (65 Hz) y una vibración corta (`navigator.vibrate(20)`).
-   */
   playHeartbeatIfDanger(timestamp) {
     if (timestamp - this.lastHeartbeat < 420) return;
     this.lastHeartbeat = timestamp;
@@ -1182,9 +1207,6 @@ class ProceduralAudio {
     this.playVictory();
   }
 
-  /**
-   * 1.3a: Sonido de Victoria: Acorde mayor ascendente al pisar la azotea de destino.
-   */
   playVictory() {
     if (this.muted) return;
     this.init();
@@ -1205,9 +1227,6 @@ class ProceduralAudio {
     }
   }
 
-  /**
-   * 1.3b: Sonido de Caída: Barrido descendente con eco al caer al vacío.
-   */
   playFall() {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([90, 45, 140]);
@@ -1217,7 +1236,6 @@ class ProceduralAudio {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // 3 repeticiones de eco descendente
     const delays = [0, 0.18, 0.36];
     const amps = [0.22, 0.11, 0.055];
     for (let i = 0; i < delays.length; i++) {
