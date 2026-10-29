@@ -6,13 +6,14 @@ export const CITIES = [
     flag: '🇦🇷',
     name: { es: 'Buenos Aires', en: 'Buenos Aires' },
     monumentName: { es: 'Obelisco y Puerto Madero', en: 'Obelisk & Puerto Madero' },
-    weatherLabel: { es: 'Brisa del Plata', en: 'River Plate Breeze' },
+    weatherLabel: { es: 'Brisa Nocturna y Reflectores', en: 'Night Breeze & Searchlights' },
     skyTop: '#040a1c',
     skyMid: '#0b1d42',
     skyBot: '#13315c',
     winColor: '#fef08a',
     accentColor: '#38bdf8',
     weather: 'breeze',
+    weatherArchetype: 'urban',
     windStrength: 0.42,
     monument: 'obelisco',
   },
@@ -21,13 +22,14 @@ export const CITIES = [
     flag: '🇧🇷',
     name: { es: 'São Paulo', en: 'São Paulo' },
     monumentName: { es: 'Ponte Octávio Frias de Oliveira', en: 'Octávio Frias Cable Bridge' },
-    weatherLabel: { es: 'Viento Paulista', en: 'Paulista Crosswind' },
-    skyTop: '#041221',
-    skyMid: '#0c2b45',
-    skyBot: '#154c68',
+    weatherLabel: { es: 'Brasa Nocturna Paulista', en: 'Paulista Warm Night Haze' },
+    skyTop: '#12091c',
+    skyMid: '#261438',
+    skyBot: '#422040',
     winColor: '#fde047',
-    accentColor: '#34d399',
-    weather: 'breeze',
+    accentColor: '#f59e0b',
+    weather: 'haze',
+    weatherArchetype: 'golden_embers',
     windStrength: 0.49,
     monument: 'sealink',
   },
@@ -36,13 +38,14 @@ export const CITIES = [
     flag: '🇲🇽',
     name: { es: 'CDMX', en: 'Mexico City' },
     monumentName: { es: 'Torre Latinoamericana y El Ángel', en: 'Torre Latinoamericana & The Angel' },
-    weatherLabel: { es: 'Bruma Dorada de Altura', en: 'High-Altitude Golden Haze' },
+    weatherLabel: { es: 'Polvo Dorado de Altura', en: 'High-Altitude Golden Dust' },
     skyTop: '#140c05',
     skyMid: '#2d1b0b',
     skyBot: '#4a2c11',
     winColor: '#fbbf24',
     accentColor: '#f59e0b',
     weather: 'haze',
+    weatherArchetype: 'golden_embers',
     windStrength: 0.56,
     monument: 'angel',
   },
@@ -51,13 +54,14 @@ export const CITIES = [
     flag: '🇺🇸',
     name: { es: 'Nueva York', en: 'New York' },
     monumentName: { es: 'Aguja del Empire State', en: 'Empire State Spire' },
-    weatherLabel: { es: 'Corriente de Manhattan', en: 'Manhattan Canyon Draft' },
+    weatherLabel: { es: 'Reflectores de Manhattan', en: 'Manhattan Sky Searchlights' },
     skyTop: '#040814',
     skyMid: '#0f1b38',
     skyBot: '#1e325c',
     winColor: '#e0f2fe',
     accentColor: '#60a5fa',
     weather: 'steam',
+    weatherArchetype: 'urban',
     windStrength: 0.63,
     monument: 'empire',
   },
@@ -73,6 +77,7 @@ export const CITIES = [
     winColor: '#bae6fd',
     accentColor: '#38bdf8',
     weather: 'gusts',
+    weatherArchetype: 'urban',
     windStrength: 0.71,
     monument: 'empire',
   },
@@ -81,13 +86,14 @@ export const CITIES = [
     flag: '🇨🇦',
     name: { es: 'Toronto', en: 'Toronto' },
     monumentName: { es: 'Silueta de la CN Tower', en: 'CN Tower Silhouette' },
-    weatherLabel: { es: 'Nieve Ligera Nocturna', en: 'Light Night Snow' },
-    skyTop: '#0b061f',
-    skyMid: '#1d1242',
-    skyBot: '#312168',
-    winColor: '#ddd6fe',
-    accentColor: '#a78bfa',
+    weatherLabel: { es: 'Ventisca Helada de Altura', en: 'High-Altitude Ice Blizzard' },
+    skyTop: '#071226',
+    skyMid: '#102a4c',
+    skyBot: '#1c4472',
+    winColor: '#e0f2fe',
+    accentColor: '#7dd3fc',
     weather: 'snow',
+    weatherArchetype: 'blizzard',
     windStrength: 0.78,
     monument: 'cntower',
   },
@@ -96,13 +102,14 @@ export const CITIES = [
     flag: '🇬🇧',
     name: { es: 'Londres', en: 'London' },
     monumentName: { es: 'Big Ben, London Eye y The Shard', en: 'Big Ben, London Eye & The Shard' },
-    weatherLabel: { es: 'Niebla del Támesis', en: 'Thames Dense Fog' },
-    skyTop: '#070b12',
-    skyMid: '#151e2e',
-    skyBot: '#263449',
+    weatherLabel: { es: 'Niebla Profunda del Támesis', en: 'Thames Nocturnal Mist' },
+    skyTop: '#050a14',
+    skyMid: '#0f1e36',
+    skyBot: '#1c3456',
     winColor: '#fecaca',
-    accentColor: '#ef4444',
+    accentColor: '#38bdf8',
     weather: 'fog',
+    weatherArchetype: 'urban',
     windStrength: 0.85,
     monument: 'londoneye',
   },
@@ -111,13 +118,14 @@ export const CITIES = [
     flag: '🇫🇷',
     name: { es: 'París', en: 'Paris' },
     monumentName: { es: 'Torre Eiffel Iluminada', en: 'Illuminated Eiffel Tower' },
-    weatherLabel: { es: 'Ráfagas de Altura', en: 'High-Altitude Gusts' },
-    skyTop: '#08091c',
-    skyMid: '#1e1938',
-    skyBot: '#3b2b54',
+    weatherLabel: { es: 'Haces de Luz Nocturnos', en: 'Eiffel Nocturnal Beams' },
+    skyTop: '#06091c',
+    skyMid: '#121d42',
+    skyBot: '#1e3266',
     winColor: '#fde68a',
     accentColor: '#fbbf24',
     weather: 'gusts',
+    weatherArchetype: 'urban',
     windStrength: 0.92,
     monument: 'eiffel',
   },
@@ -126,13 +134,14 @@ export const CITIES = [
     flag: '🇪🇸',
     name: { es: 'Madrid', en: 'Madrid' },
     monumentName: { es: 'Cuatro Torres Business Area', en: 'Cuatro Torres Skyline' },
-    weatherLabel: { es: 'Viento de la Sierra', en: 'Sierra Night Wind' },
-    skyTop: '#160b06',
-    skyMid: '#33180c',
-    skyBot: '#522612',
-    winColor: '#fdba74',
-    accentColor: '#fb923c',
-    weather: 'breeze',
+    weatherLabel: { es: 'Ventisca Fría de la Sierra', en: 'Sierra High-Altitude Gale' },
+    skyTop: '#081326',
+    skyMid: '#14294a',
+    skyBot: '#214270',
+    winColor: '#bae6fd',
+    accentColor: '#38bdf8',
+    weather: 'snow',
+    weatherArchetype: 'blizzard',
     windStrength: 0.99,
     monument: 'obelisco',
   },
@@ -141,13 +150,14 @@ export const CITIES = [
     flag: '🇩🇪',
     name: { es: 'Berlín', en: 'Berlin' },
     monumentName: { es: 'Torre de TV en Alexanderplatz', en: 'Fernsehturm Alexanderplatz' },
-    weatherLabel: { es: 'Frente Frío Europeo', en: 'Cold European Front' },
+    weatherLabel: { es: 'Ventisca invernal Europea', en: 'European Winter Blizzard' },
     skyTop: '#06101c',
     skyMid: '#122640',
     skyBot: '#1e3e64',
     winColor: '#a5f3fc',
     accentColor: '#22d3ee',
-    weather: 'gusts',
+    weather: 'snow',
+    weatherArchetype: 'blizzard',
     windStrength: 1.06,
     monument: 'cntower',
   },
@@ -156,13 +166,14 @@ export const CITIES = [
     flag: '🇹🇷',
     name: { es: 'Estambul', en: 'Istanbul' },
     monumentName: { es: 'Puente del Bósforo y Minaretes', en: 'Bosphorus Bridge & Minarets' },
-    weatherLabel: { es: 'Corriente del Estrecho', en: 'Strait Crosswind' },
-    skyTop: '#060c1f',
-    skyMid: '#182247',
-    skyBot: '#2e386b',
+    weatherLabel: { es: 'Brasa Dorada del Estrecho', en: 'Bosphorus Golden Ember Wind' },
+    skyTop: '#160b18',
+    skyMid: '#31152e',
+    skyBot: '#522338',
     winColor: '#fde047',
-    accentColor: '#f43f5e',
+    accentColor: '#f59e0b',
     weather: 'gusts',
+    weatherArchetype: 'golden_embers',
     windStrength: 1.13,
     monument: 'bosphorus',
   },
@@ -171,13 +182,14 @@ export const CITIES = [
     flag: '🇪🇬',
     name: { es: 'El Cairo', en: 'Cairo' },
     monumentName: { es: 'Pirámides de Giza', en: 'Pyramids of Giza' },
-    weatherLabel: { es: 'Viento de Arena Nocturno', en: 'Desert Sand Wind' },
+    weatherLabel: { es: 'Tormenta de Polvo Dorado', en: 'Golden Desert Dust Storm' },
     skyTop: '#1a0d04',
     skyMid: '#422009',
     skyBot: '#6b3610',
     winColor: '#fed7aa',
     accentColor: '#f97316',
     weather: 'sand',
+    weatherArchetype: 'golden_embers',
     windStrength: 1.2,
     monument: 'pyramids',
   },
@@ -186,13 +198,14 @@ export const CITIES = [
     flag: '🇦🇪',
     name: { es: 'Dubái', en: 'Dubai' },
     monumentName: { es: 'Aguja del Burj Khalifa (828m)', en: 'Burj Khalifa Spire (828m)' },
-    weatherLabel: { es: 'Corriente Térmica del Golfo', en: 'Gulf Thermal Updraft' },
-    skyTop: '#040406',
-    skyMid: '#1c1405',
-    skyBot: '#3b2908',
+    weatherLabel: { es: 'Brasa Ámbar del Golfo', en: 'Gulf Amber Thermal Dust' },
+    skyTop: '#180d04',
+    skyMid: '#361f09',
+    skyBot: '#593310',
     winColor: '#fde047',
     accentColor: '#f59e0b',
     weather: 'lasers',
+    weatherArchetype: 'golden_embers',
     windStrength: 1.28,
     monument: 'burjkhalifa',
   },
@@ -201,13 +214,14 @@ export const CITIES = [
     flag: '🇮🇳',
     name: { es: 'Mumbai', en: 'Mumbai' },
     monumentName: { es: 'Puente Colgante Sea Link', en: 'Bandra-Worli Sea Link' },
-    weatherLabel: { es: 'Lluvia Diagonal de Monzón', en: 'Diagonal Monsoon Rain' },
-    skyTop: '#120621',
-    skyMid: '#2a1045',
-    skyBot: '#461b6e',
+    weatherLabel: { es: 'Lluvia Diagonal de Monzón', en: 'Diagonal Monsoon Neon Rain' },
+    skyTop: '#0b0620',
+    skyMid: '#1c1042',
+    skyBot: '#2f1b68',
     winColor: '#fbcfe8',
     accentColor: '#e879f9',
     weather: 'monsoon',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.35,
     monument: 'sealink',
   },
@@ -216,13 +230,14 @@ export const CITIES = [
     flag: '🇹🇭',
     name: { es: 'Bangkok', en: 'Bangkok' },
     monumentName: { es: 'Torre MahaNakhon Pixelada', en: 'MahaNakhon Pixel Tower' },
-    weatherLabel: { es: 'Tormenta Tropical', en: 'Tropical Storm Gusts' },
-    skyTop: '#110620',
-    skyMid: '#271148',
-    skyBot: '#3f1c6e',
+    weatherLabel: { es: 'Lluvia Eléctrica Tropical', en: 'Tropical Neon Downpour' },
+    skyTop: '#0c0622',
+    skyMid: '#1e1148',
+    skyBot: '#331c6e',
     winColor: '#fde047',
-    accentColor: '#fb7185',
+    accentColor: '#ec4899',
     weather: 'lightning',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.42,
     monument: 'empire',
   },
@@ -231,13 +246,14 @@ export const CITIES = [
     flag: '🇸🇬',
     name: { es: 'Singapur', en: 'Singapore' },
     monumentName: { es: '3 Torres Marina Bay Sands', en: 'Marina Bay Sands SkyPark' },
-    weatherLabel: { es: 'Reflectores de la Bahía', en: 'Bay Laser Searchlights' },
-    skyTop: '#031021',
-    skyMid: '#0a2b4c',
-    skyBot: '#114a75',
+    weatherLabel: { es: 'Lluvia Neón de la Bahía', en: 'Marina Bay Cyber Rain' },
+    skyTop: '#04091e',
+    skyMid: '#0d1d45',
+    skyBot: '#18346e',
     winColor: '#a5f3fc',
-    accentColor: '#22d3ee',
+    accentColor: '#00f2fe',
     weather: 'lasers',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.5,
     monument: 'marinabay',
   },
@@ -246,13 +262,14 @@ export const CITIES = [
     flag: '🇭🇰',
     name: { es: 'Hong Kong', en: 'Hong Kong' },
     monumentName: { es: 'Bahía Victoria y Bank of China', en: 'Victoria Harbour & Bank of China' },
-    weatherLabel: { es: 'Ráfagas de Tifón', en: 'Typhoon Gusts' },
-    skyTop: '#031119',
-    skyMid: '#0a2c3d',
-    skyBot: '#124963',
+    weatherLabel: { es: 'Tifón Cyberpunk Neón', en: 'Neon Cyberpunk Typhoon' },
+    skyTop: '#040a1c',
+    skyMid: '#0c2040',
+    skyBot: '#153a66',
     winColor: '#6ee7b7',
-    accentColor: '#10b981',
+    accentColor: '#00f2fe',
     weather: 'typhoon',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.58,
     monument: 'hkharbor',
   },
@@ -261,13 +278,14 @@ export const CITIES = [
     flag: '🇰🇷',
     name: { es: 'Seúl', en: 'Seoul' },
     monumentName: { es: 'Lotte World Tower Cyberpunk', en: 'Lotte World Tower Cyberpunk' },
-    weatherLabel: { es: 'Viento Eléctrico Neón', en: 'Cyberpunk Electric Wind' },
-    skyTop: '#040724',
-    skyMid: '#0f1c59',
-    skyBot: '#1d3587',
+    weatherLabel: { es: 'Lluvia Neón Cian/Magenta', en: 'Cyan/Magenta Cyber Rain' },
+    skyTop: '#050622',
+    skyMid: '#12184f',
+    skyBot: '#222d7a',
     winColor: '#7dd3fc',
-    accentColor: '#00f5d4',
+    accentColor: '#f43f5e',
     weather: 'cyber',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.66,
     monument: 'lotte',
   },
@@ -276,13 +294,14 @@ export const CITIES = [
     flag: '🇦🇺',
     name: { es: 'Sídney', en: 'Sydney' },
     monumentName: { es: 'Ópera de Sídney y Harbour Bridge', en: 'Sydney Opera House & Harbour Bridge' },
-    weatherLabel: { es: 'Vendaval Oceánico', en: 'Oceanic Harbor Gale' },
+    weatherLabel: { es: 'Ventisca Austral Oceánica', en: 'Southern Ocean Gale Blizzard' },
     skyTop: '#040e21',
     skyMid: '#0b264f',
     skyBot: '#16427d',
     winColor: '#f1f5f9',
     accentColor: '#38bdf8',
     weather: 'gusts',
+    weatherArchetype: 'blizzard',
     windStrength: 1.75,
     monument: 'opera',
   },
@@ -291,13 +310,14 @@ export const CITIES = [
     flag: '🇯🇵',
     name: { es: 'Tokio', en: 'Tokyo' },
     monumentName: { es: 'Shinjuku Neón y Torre de Tokio', en: 'Shinjuku Neon & Tokyo Tower' },
-    weatherLabel: { es: 'Tormenta Final en las Alturas', en: 'Ultimate High-Altitude Storm' },
-    skyTop: '#10041f',
-    skyMid: '#260b45',
-    skyBot: '#42146e',
+    weatherLabel: { es: 'Tormenta Cyberpunk Final', en: 'Ultimate Cyberpunk Neon Storm' },
+    skyTop: '#090420',
+    skyMid: '#1b0b45',
+    skyBot: '#32146e',
     winColor: '#fda4af',
-    accentColor: '#fb7185',
+    accentColor: '#00f2fe',
     weather: 'lightning',
+    weatherArchetype: 'cyber_rain',
     windStrength: 1.85,
     monument: 'tokyotower',
   },
@@ -648,6 +668,10 @@ export const I18N = {
     cityWord: 'Ciudad',
     windLabel: 'VIENTO',
     windGustAlert: '⚠️ RÁFAGA DE VIENTO',
+    nearMissPopup: '⚡ ¡SALVADA AL LÍMITE! +100',
+    feverModeBadge: '🔥 MODO FRENESÍ x2',
+    perfectCatchLabel: '¡PERFECTO!',
+    goodCatchLabel: '¡BIEN!',
     lossModalHeader:
       '🚨 ¡PERDISTE EL EJE DE GRAVEDAD EN EL METRO {meter}m DE {city} (NIVEL {level})!',
     lossModalSub: 'Cámara lenta activada ({seconds}s antes de caer al abismo)...',
@@ -752,6 +776,10 @@ export const I18N = {
     cityWord: 'City',
     windLabel: 'WIND',
     windGustAlert: '⚠️ WIND GUST',
+    nearMissPopup: '⚡ EDGE SAVE! +100',
+    feverModeBadge: '🔥 FEVER MODE x2',
+    perfectCatchLabel: 'PERFECT!',
+    goodCatchLabel: 'NICE!',
     lossModalHeader:
       '🚨 YOU LOST YOUR CENTER OF GRAVITY AT METER {meter}m OF {city} (LEVEL {level})!',
     lossModalSub: 'Slow-motion activated ({seconds}s before falling into the abyss)...',
@@ -867,7 +895,7 @@ export function getSeasonTimeRemaining() {
 }
 
 /**
- * BLOQUE 1: Curva de Velocidad de Caminata Progresiva en 5 Fases (Escalado fuerte desde Nivel 4)
+ * Curva de Velocidad de Caminata Progresiva en 5 Fases (Escalado fuerte desde Nivel 4)
  * - Niveles 1 a 3: 1.0x (velocidad base de aprendizaje)
  * - Niveles 4 a 10: escala de 1.25x a 1.45x
  * - Niveles 11 a 25: escala de 1.50x a 1.75x
@@ -910,24 +938,20 @@ export function getLevelConfig(level) {
   const city = CITIES[cityIndex];
   const stageInCity = ((safeLvl - 1) % 5) + 1;
 
-  // 1. Velocidad de Caminata Progresiva en 5 Fases y longitud de cable proporcional
   const walkSpeedMultiplier = getWalkSpeedMultiplier(safeLvl);
   const baseWalkSpeed = 5.0;
   const walkSpeed = Number((baseWalkSpeed * walkSpeedMultiplier).toFixed(3));
   const totalDistance = getLevelTargetMeters(safeLvl);
 
-  // 2. Acoplamiento físico: factor de dificultad para retroceso de captura (catchRecoil) desde Nivel 4
   const difficultyFactor =
     safeLvl < 4 ? 0 : Number((walkSpeedMultiplier * (1 + (safeLvl - 4) * 0.018)).toFixed(3));
 
-  // 3. Velocidad de vuelo de las esferas (walkSpeedMultiplier * 1.15) y ventana de captura (0.28 -> 0.14)
   const juggleSpeedMultiplier = Number((walkSpeedMultiplier * 1.15).toFixed(3));
   const juggleBaseSpeed = Number((0.62 * juggleSpeedMultiplier).toFixed(3));
   const catchWindow = Number(
     Math.max(0.14, 0.28 - ((safeLvl - 1) / 99) * 0.14).toFixed(4)
   );
 
-  // 4. Ráfagas de viento cruzado (Cada 4.5s a 6.0s según nivel)
   const windChangeFreq =
     safeLvl < 4
       ? 6.0
@@ -961,12 +985,17 @@ export function getLevelConfig(level) {
   };
 }
 
-// Procedural Web Audio API Engine
+// ============================================================================
+// BLOQUE 1: MOTOR DE AUDIO PROCEDURAL (`Web Audio API`) + VIBRACIÓN HÁPTICA MÓVIL
+// ============================================================================
+const PENTATONIC_SCALE = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+
 class ProceduralAudio {
   constructor() {
     this.ctx = null;
     this.muted = false;
     this.lastHeartbeat = 0;
+    this.noiseBuffer = null;
   }
 
   get enabled() {
@@ -975,18 +1004,6 @@ class ProceduralAudio {
 
   set enabled(val) {
     this.muted = !val;
-  }
-
-  playCatch(combo = 1) {
-    this.playPerfect(combo);
-  }
-
-  playLevelWin() {
-    this.playVictory();
-  }
-
-  playWindGust() {
-    this.playThunder();
   }
 
   init() {
@@ -999,84 +1016,138 @@ class ProceduralAudio {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
-  }
-
-  playPerfect(combo = 1) {
-    if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const baseFreq = 520 + Math.min(combo * 35, 480);
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.16);
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.22);
-  }
-
-  playMiss() {
-    if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(165, now);
-    osc.frequency.linearRampToValueAtTime(82, now + 0.22);
-    gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.26);
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(60);
+    if (this.ctx && !this.noiseBuffer) {
+      const sampleRate = this.ctx.sampleRate || 44100;
+      const length = Math.floor(sampleRate * 1.1);
+      const buffer = this.ctx.createBuffer(1, length, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      this.noiseBuffer = buffer;
     }
   }
 
-  playRingPass() {
+  /**
+   * 1.1: Notas de Malabar por Combo (`playCatchSound(combo, isPerfect)`):
+   * Oscilador armónico (`triangle` + `sine` con envolvente ADSR rápida de 0.18s)
+   * sobre escala pentatónica [523.25, 587.33, 659.25, 783.99, 880.0, 1046.50] Hz.
+   * Si es captura PERFECTA, suma un armónico en la octava superior y vibra 12ms.
+   */
+  playCatchSound(combo = 1, isPerfect = false) {
+    if (isPerfect && typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(12);
+    } else if (!isPerfect && typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(8);
+    }
     if (this.muted) return;
     this.init();
     if (!this.ctx) return;
+
     const now = this.ctx.currentTime;
-    const notes = [660, 880, 1175];
-    for (let i = 0; i < notes.length; i++) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(notes[i], now + i * 0.05);
-      gain.gain.setValueAtTime(0.12, now + i * 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.18);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now + i * 0.05);
-      osc.stop(now + i * 0.05 + 0.19);
+    const noteIdx = Math.max(0, (combo - 1) % PENTATONIC_SCALE.length);
+    const octaveShift = combo >= 12 ? 1.25 : 1.0;
+    const freq = PENTATONIC_SCALE[noteIdx] * octaveShift;
+
+    // Oscilador principal (triangle) + sub-armónico cálido (sine) con ADSR de 0.18s
+    const oscTri = this.ctx.createOscillator();
+    const oscSine = this.ctx.createOscillator();
+    const mainGain = this.ctx.createGain();
+
+    oscTri.type = 'triangle';
+    oscSine.type = 'sine';
+    oscTri.frequency.setValueAtTime(freq, now);
+    oscSine.frequency.setValueAtTime(freq, now);
+
+    mainGain.gain.setValueAtTime(0.001, now);
+    mainGain.gain.linearRampToValueAtTime(0.18, now + 0.015);
+    mainGain.gain.exponentialRampToValueAtTime(0.06, now + 0.07);
+    mainGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    oscTri.connect(mainGain);
+    oscSine.connect(mainGain);
+    mainGain.connect(this.ctx.destination);
+
+    oscTri.start(now);
+    oscSine.start(now);
+    oscTri.stop(now + 0.19);
+    oscSine.stop(now + 0.19);
+
+    // Armónico brillante en la octava superior si fue captura PERFECTA
+    if (isPerfect) {
+      const octOsc = this.ctx.createOscillator();
+      const octGain = this.ctx.createGain();
+      octOsc.type = 'sine';
+      octOsc.frequency.setValueAtTime(freq * 2, now);
+      octOsc.frequency.exponentialRampToValueAtTime(freq * 2.04, now + 0.18);
+      octGain.gain.setValueAtTime(0.001, now);
+      octGain.gain.linearRampToValueAtTime(0.14, now + 0.012);
+      octGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      octOsc.connect(octGain);
+      octGain.connect(this.ctx.destination);
+      octOsc.start(now);
+      octOsc.stop(now + 0.19);
     }
   }
 
+  playCatch(combo = 1, isPerfect = false) {
+    this.playCatchSound(combo, isPerfect);
+  }
+
+  /**
+   * 1.2a: Sonido de Ráfaga de Viento (`⚠️ RÁFAGA DE VIENTO`):
+   * Generador de ruido blanco filtrado (`BiquadFilterNode` bandpass) que simula el silbido del viento en altura.
+   */
+  playWindGust() {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx || !this.noiseBuffer) return;
+
+    const now = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.setValueAtTime(6.5, now);
+    filter.frequency.setValueAtTime(310, now);
+    filter.frequency.exponentialRampToValueAtTime(920, now + 0.42);
+    filter.frequency.exponentialRampToValueAtTime(380, now + 0.95);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.98);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    src.start(now);
+    src.stop(now + 1.0);
+  }
+
+  /**
+   * 1.2b: Alerta de Inclinación (> 75% del ángulo límite):
+   * Emite un latido grave sutil (65 Hz) y una vibración corta (`navigator.vibrate(20)`).
+   */
   playHeartbeatIfDanger(timestamp) {
-    if (timestamp - this.lastHeartbeat < 480) return;
+    if (timestamp - this.lastHeartbeat < 420) return;
     this.lastHeartbeat = timestamp;
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([35, 50, 25]);
+      navigator.vibrate(20);
     }
     if (this.muted) return;
     this.init();
     if (!this.ctx) return;
+
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(68, now);
-    osc.frequency.exponentialRampToValueAtTime(38, now + 0.14);
-    gain.gain.setValueAtTime(0.22, now);
+    osc.frequency.setValueAtTime(65, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.14);
+    gain.gain.setValueAtTime(0.24, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
@@ -1084,89 +1155,36 @@ class ProceduralAudio {
     osc.stop(now + 0.17);
   }
 
-  playThunder() {
-    if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(92, now);
-    osc.frequency.exponentialRampToValueAtTime(28, now + 0.55);
-    gain.gain.setValueAtTime(0.13, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.62);
-  }
-
-  playFall() {
+  playNearMissSave() {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([100, 50, 150]);
+      navigator.vibrate([15, 25, 15]);
     }
     if (this.muted) return;
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(420, now);
-    osc.frequency.exponentialRampToValueAtTime(75, now + 0.85);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.92);
-  }
-
-  playGrapple() {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([35, 25, 70]);
-    }
-    if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(220, now);
-    osc.frequency.exponentialRampToValueAtTime(880, now + 0.28);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.34);
-  }
-
-  playStartWire() {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(30);
-    }
-    if (this.muted) return;
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const freqs = [330, 440, 660];
-    for (let i = 0; i < freqs.length; i++) {
+    const chord = [587.33, 783.99, 1046.5];
+    for (let i = 0; i < chord.length; i++) {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freqs[i], now + i * 0.055);
-      gain.gain.setValueAtTime(0.14, now + i * 0.055);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.22);
+      osc.frequency.setValueAtTime(chord[i], now + i * 0.045);
+      gain.gain.setValueAtTime(0.14, now + i * 0.045);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.045 + 0.22);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-      osc.start(now + i * 0.055);
-      osc.stop(now + i * 0.055 + 0.24);
+      osc.start(now + i * 0.045);
+      osc.stop(now + i * 0.045 + 0.23);
     }
   }
 
+  playLevelWin() {
+    this.playVictory();
+  }
+
+  /**
+   * 1.3a: Sonido de Victoria: Acorde mayor ascendente al pisar la azotea de destino.
+   */
   playVictory() {
     if (this.muted) return;
     this.init();
@@ -1177,14 +1195,66 @@ class ProceduralAudio {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(notes[idx], now + idx * 0.08);
-      gain.gain.setValueAtTime(0.15, now + idx * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.34);
+      osc.frequency.setValueAtTime(notes[idx], now + idx * 0.085);
+      gain.gain.setValueAtTime(0.17, now + idx * 0.085);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.085 + 0.38);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-      osc.start(now + idx * 0.08);
-      osc.stop(now + idx * 0.08 + 0.36);
+      osc.start(now + idx * 0.085);
+      osc.stop(now + idx * 0.085 + 0.4);
     }
+  }
+
+  /**
+   * 1.3b: Sonido de Caída: Barrido descendente con eco al caer al vacío.
+   */
+  playFall() {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([90, 45, 140]);
+    }
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // 3 repeticiones de eco descendente
+    const delays = [0, 0.18, 0.36];
+    const amps = [0.22, 0.11, 0.055];
+    for (let i = 0; i < delays.length; i++) {
+      const d = delays[i];
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440 - i * 45, now + d);
+      osc.frequency.exponentialRampToValueAtTime(68, now + d + 0.78);
+      gain.gain.setValueAtTime(amps[i], now + d);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + d + 0.82);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + d);
+      osc.stop(now + d + 0.84);
+    }
+  }
+
+  playGrapple() {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([30, 25, 65]);
+    }
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(980, now + 0.3);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.36);
   }
 }
 

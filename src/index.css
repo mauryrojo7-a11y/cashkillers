@@ -213,6 +213,14 @@ body,
   gap: 3px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.compact-play-hud.fever-active {
+  border-color: rgba(253, 224, 71, 0.75);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.6),
+    0 0 22px rgba(250, 204, 21, 0.42);
 }
 
 .compact-hud-top-row {
@@ -416,6 +424,128 @@ body,
     transform: translateX(-50%) scale(1.03);
     border-color: #fde047;
     color: #fde047;
+  }
+}
+
+/* ==================== BLOQUE 3: SALVADA AL LÍMITE, MODO FRENESÍ Y FEEDBACK FLOTANTE ==================== */
+.near-miss-floater {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 94px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 27;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(6, 18, 36, 0.9), rgba(20, 48, 74, 0.9));
+  border: 1.5px solid #00f2fe;
+  color: #fde047;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow:
+    0 0 22px rgba(0, 242, 254, 0.8),
+    0 0 12px rgba(250, 204, 21, 0.6);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: floatUpNearMiss 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatUpNearMiss {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.85);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, 0px) scale(1.06);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -26px) scale(0.94);
+  }
+}
+
+.fever-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.28), rgba(0, 242, 254, 0.28));
+  border: 1px solid #fde047;
+  color: #fde047;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(253, 224, 71, 0.85);
+  animation: pulseFeverBadge 0.35s infinite alternate;
+}
+
+@keyframes pulseFeverBadge {
+  from {
+    box-shadow: 0 0 6px rgba(250, 204, 21, 0.5);
+  }
+  to {
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.9);
+  }
+}
+
+/* Feedback Flotante de Captura en Mano Izquierda y Derecha (sube 30px y se desvanece en 0.55s) */
+.hand-catch-floater {
+  position: absolute;
+  bottom: 24%;
+  z-index: 24;
+  pointer-events: none;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(4, 9, 20, 0.55);
+  backdrop-filter: blur(4px);
+  animation: handCatchFloat30 0.55s ease-out forwards;
+}
+
+.hand-catch-floater.left {
+  left: 14%;
+}
+
+.hand-catch-floater.right {
+  right: 14%;
+}
+
+.hand-catch-floater.perfect {
+  color: #fde047;
+  border: 1px solid rgba(253, 224, 71, 0.75);
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.9);
+}
+
+.hand-catch-floater.good {
+  color: #00f2fe;
+  border: 1px solid rgba(0, 242, 254, 0.65);
+  text-shadow: 0 0 10px rgba(0, 242, 254, 0.85);
+}
+
+@keyframes handCatchFloat30 {
+  0% {
+    opacity: 1;
+    transform: translateY(0px) scale(0.92);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-12px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.96);
   }
 }
 

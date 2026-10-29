@@ -21,11 +21,6 @@ const CRITICAL_ANGLE_RAD = 0.82; // ~47 degrees critical fall angle
 // GENERADORES DE TEXTURAS Y SHADERS "VECTOR" (EJECUTADOS 1 SOLA VEZ AL INICIAR)
 // ============================================================================
 
-/**
- * Shader Material de Silueta "Vector" (Nekki Style):
- * Acabado negro mate profundo (0x06080e) con iluminación de borde Fresnel / Rim Light
- * en neón cian (0x00f2fe) que recorta la figura anatómica contra el contraluz urbano.
- */
 function createVectorSilhouetteMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -54,7 +49,7 @@ function createVectorSilhouetteMaterial() {
       void main() {
         float ndotv = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
         float fresnel = pow(1.0 - ndotv, uRimPower);
-        float rim = smoothstep(0.24, 0.86, fresnel) * uRimStrength;
+        float rim = smoothstep(0.22, 0.86, fresnel) * uRimStrength;
         vec3 finalCol = mix(uBaseColor, uRimColor, rim);
         gl_FragColor = vec4(finalCol, 1.0);
       }
@@ -62,10 +57,6 @@ function createVectorSilhouetteMaterial() {
   });
 }
 
-/**
- * Fondo de contraluz atmosférico (azul petróleo, cian brumoso y horizonte luminoso)
- * para que la silueta negra mate del acróbata destaque con contraste total.
- */
 function createBacklitHorizonTexture() {
   const c = document.createElement('canvas');
   c.width = 256;
@@ -83,7 +74,6 @@ function createBacklitHorizonTexture() {
   g.fillStyle = grad;
   g.fillRect(0, 0, 256, 512);
 
-  // Resplandor radial central cian brumoso detrás del acróbata
   const rad = g.createRadialGradient(128, 305, 10, 128, 305, 135);
   rad.addColorStop(0.0, 'rgba(0, 242, 254, 0.52)');
   rad.addColorStop(0.45, 'rgba(14, 165, 233, 0.26)');
@@ -207,13 +197,12 @@ function createHelipadTexture() {
 }
 
 // ============================================================================
-// CONSTRUCCIÓN DE LA ESCENA 3D WEBGL (`Three.js`) — ESTÉTICA "VECTOR" (NEKKI)
+// CONSTRUCCIÓN DE LA ESCENA 3D WEBGL (`Three.js`) — ESTÉTICA "VECTOR" + CLIMA 3D
 // ============================================================================
 function buildThreeWorld(mountEl) {
   const width = mountEl.clientWidth || 420;
   const height = mountEl.clientHeight || 780;
 
-  // Escena con atmósfera azul petróleo / cian brumoso para recortar la silueta negra
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x061326);
   scene.fog = new THREE.FogExp2(0x0a2239, 0.011);
@@ -234,7 +223,6 @@ function buildThreeWorld(mountEl) {
   mountEl.innerHTML = '';
   mountEl.appendChild(renderer.domElement);
 
-  // Iluminación atmosférica nocturna + luces puntuales de neón
   const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.85);
   scene.add(ambientLight);
 
@@ -250,7 +238,6 @@ function buildThreeWorld(mountEl) {
   goldOrbLight.position.set(0, 2.5, -0.3);
   scene.add(goldOrbLight);
 
-  // Telón de contraluz atmosférico (azul petróleo y cian brumoso) detrás del horizonte
   const backlitTex = createBacklitHorizonTexture();
   const backlitGeo = new THREE.PlaneGeometry(340, 220);
   const backlitMat = new THREE.MeshBasicMaterial({
@@ -262,9 +249,7 @@ function buildThreeWorld(mountEl) {
   backlitBackdrop.position.set(0, 12, -210);
   scene.add(backlitBackdrop);
 
-  // ============================================================================
-  // CABLE DE ACERO EN EL EJE Z (`X = 0, Y = 0`) CON FILAMENTO LÁSER CIAN
-  // ============================================================================
+  // Cable de acero en el eje Z (`X = 0, Y = 0`)
   const maxCableLen = 1800;
   const cableTex = createBraidedCableTexture();
   const cableGeo = new THREE.CylinderGeometry(0.042, 0.042, maxCableLen, 16);
@@ -292,7 +277,7 @@ function buildThreeWorld(mountEl) {
   coreWireMesh.position.set(0, 0.022, -maxCableLen * 0.5 + 12);
   scene.add(coreWireMesh);
 
-  // Azotea de salida en silueta oscura con borde neón cian
+  // Azotea de salida y llegada
   const roofMat = new THREE.MeshStandardMaterial({
     color: 0x050912,
     roughness: 0.8,
@@ -303,7 +288,6 @@ function buildThreeWorld(mountEl) {
   startRoof.position.set(0, -30.045, 3.5);
   scene.add(startRoof);
 
-  // Azotea de llegada con helipuerto luminoso (`Z = -targetDistance`)
   const arrivalGroup = new THREE.Group();
   const endTowerGeo = new THREE.BoxGeometry(9.2, 70, 9.2);
   const endTowerMesh = new THREE.Mesh(endTowerGeo, roofMat);
@@ -328,9 +312,7 @@ function buildThreeWorld(mountEl) {
   arrivalGroup.position.set(0, 0, -100);
   scene.add(arrivalGroup);
 
-  // ============================================================================
-  // RASCACIELOS EN CAPAS DE PROFUNDIDAD ATMOSFÉRICA + HACES DE LUZ NOCTURNOS
-  // ============================================================================
+  // Rascacielos en capas de profundidad atmosférica + haces de luz nocturnos
   const nearWinTex = createSkyscraperWindowTexture(false);
   const farWinTex = createSkyscraperWindowTexture(true);
 
@@ -362,7 +344,7 @@ function buildThreeWorld(mountEl) {
   const skyscrapers = [];
   for (let i = 0; i < 44; i++) {
     const isLeft = i % 2 === 0;
-    const layer = i % 3; // 0: primer plano, 1: capa media azul petróleo, 2: fondo cian brumoso
+    const layer = i % 3;
     const rowIdx = Math.floor(i / 2);
 
     const bw = 6.5 + (i % 4) * 2.1 + layer * 2.2;
@@ -389,7 +371,6 @@ function buildThreeWorld(mountEl) {
     const yPos = -60 + bh * 0.5;
     bMesh.position.set(xOffset, yPos, zPos);
 
-    // Filo vertical cian de contraluz en las aristas interiores de los edificios cercanos
     if (layer === 0) {
       const edgeGeo = new THREE.BoxGeometry(0.12, bh, 0.12);
       const edgeMesh = new THREE.Mesh(edgeGeo, rimEdgeMat);
@@ -405,7 +386,6 @@ function buildThreeWorld(mountEl) {
     skyscrapers.push(bMesh);
   }
 
-  // Haces de luz volumétricos nocturnos (Conos translúcidos cian y azul petróleo)
   const spotlightBeams = [];
   const beamGeo = new THREE.ConeGeometry(5.5, 115, 20, 1, true);
   for (let i = 0; i < 10; i++) {
@@ -426,6 +406,7 @@ function buildThreeWorld(mountEl) {
     scene.add(beamMesh);
     spotlightBeams.push({
       mesh: beamMesh,
+      mat: beamMat,
       baseAngle: (isLeft ? -1 : 1) * 0.24,
       speed: 0.45 + (i % 4) * 0.18,
       phaseOffset: i * 1.1,
@@ -450,20 +431,40 @@ function buildThreeWorld(mountEl) {
   }
 
   // ============================================================================
-  // BLOQUE 3: ESTÉTICA "VECTOR": ACRÓBATA EN SILUETA NEGRA MATE (`0x06080e`) + RIM LIGHT CIAN (`0x00f2fe`)
-  // Ambos pies apoyados en `(X = 0, Y = 0)` sobre el cable 3D.
+  // BLOQUE 4: POOL DE PARTÍCULAS CLIMÁTICAS 3D RECICLADAS (`THREE.Points`, CERO GC)
+  // ============================================================================
+  const weatherCount = 220;
+  const weatherPositions = new Float32Array(weatherCount * 3);
+  for (let i = 0; i < weatherCount; i++) {
+    weatherPositions[i * 3 + 0] = (Math.random() - 0.5) * 28;
+    weatherPositions[i * 3 + 1] = -6 + Math.random() * 20;
+    weatherPositions[i * 3 + 2] = 6 - Math.random() * 55;
+  }
+  const weatherGeo = new THREE.BufferGeometry();
+  weatherGeo.setAttribute('position', new THREE.BufferAttribute(weatherPositions, 3));
+  const weatherMat = new THREE.PointsMaterial({
+    color: 0x00f2fe,
+    size: 0.14,
+    transparent: true,
+    opacity: 0.65,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const weatherPoints = new THREE.Points(weatherGeo, weatherMat);
+  scene.add(weatherPoints);
+
+  // ============================================================================
+  // ACRÓBATA EN SILUETA NEGRA MATE (`0x06080e`) + RIM LIGHT CIAN (`0x00f2fe`)
   // ============================================================================
   const acrobatGroup = new THREE.Group();
   acrobatGroup.position.set(0, 0, 0);
   scene.add(acrobatGroup);
 
   const vectorSilhouetteMat = createVectorSilhouetteMaterial();
-
   const pureCyanNeonMat = new THREE.MeshBasicMaterial({
     color: 0x00f2fe,
   });
 
-  // Piernas articuladas estilizadas en silueta negra con Rim Light cian
   const createArticulatedLeg = (isLeft) => {
     const hipGroup = new THREE.Group();
     hipGroup.position.set(isLeft ? -0.08 : 0.08, 0.88, 0);
@@ -527,6 +528,17 @@ function buildThreeWorld(mountEl) {
   chestMesh.position.set(0, 0.35, 0);
   torsoSpineGroup.add(chestMesh);
 
+  // Tira dorsal de energía (se enciende al doble en Modo Frenesí Combo x10)
+  const dorsalStripGeo = new THREE.BoxGeometry(0.036, 0.38, 0.024);
+  const dorsalStripMat = new THREE.MeshBasicMaterial({
+    color: 0x00f2fe,
+    transparent: true,
+    opacity: 0.45,
+  });
+  const dorsalStripMesh = new THREE.Mesh(dorsalStripGeo, dorsalStripMat);
+  dorsalStripMesh.position.set(0, 0.26, 0.13);
+  torsoSpineGroup.add(dorsalStripMesh);
+
   const shoulderCapGeo = new THREE.SphereGeometry(0.078, 16, 16);
   const leftCapMesh = new THREE.Mesh(shoulderCapGeo, vectorSilhouetteMat);
   leftCapMesh.position.set(-0.255, 0.45, 0);
@@ -550,7 +562,6 @@ function buildThreeWorld(mountEl) {
   const craniumMesh = new THREE.Mesh(craniumGeo, vectorSilhouetteMat);
   headGroup.add(craniumMesh);
 
-  // Cinta de la cabeza en neón cian intenso (`0x00f2fe`) ondeando al viento
   const headbandGeo = new THREE.TorusGeometry(0.116, 0.016, 12, 28);
   headbandGeo.rotateX(Math.PI / 2);
   const headbandMesh = new THREE.Mesh(headbandGeo, pureCyanNeonMat);
@@ -584,7 +595,6 @@ function buildThreeWorld(mountEl) {
   const ribbonSeg3 = new THREE.Mesh(segGeo3, pureCyanNeonMat);
   ribbonJoint3.add(ribbonSeg3);
 
-  // Brazos y Antebrazos en silueta negra mate + Rim Light cian
   const createArticulatedArm = (isLeft) => {
     const shoulderGroup = new THREE.Group();
     shoulderGroup.position.set(isLeft ? -0.255 : 0.255, 0.44, 0);
@@ -654,7 +664,35 @@ function buildThreeWorld(mountEl) {
   rightTipMesh.position.set(poleLen * 0.5, 0, 0);
   poleGroup.add(rightTipMesh);
 
-  // Aros receptores láser sutiles en ambas manos
+  // ============================================================================
+  // BLOQUE 2.2: LÍNEA LÁSER 3D DEL GANCHO SALVAVIDAS + DESTELLO DE PARTÍCULAS CIAN
+  // ============================================================================
+  const grappleLinePositions = new Float32Array(6);
+  const grappleLineGeo = new THREE.BufferGeometry();
+  grappleLineGeo.setAttribute(
+    'position',
+    new THREE.BufferAttribute(grappleLinePositions, 3)
+  );
+  const grappleLineMat = new THREE.LineBasicMaterial({
+    color: 0x00f2fe,
+    linewidth: 3,
+  });
+  const grappleLaserLine = new THREE.Line(grappleLineGeo, grappleLineMat);
+  grappleLaserLine.visible = false;
+  scene.add(grappleLaserLine);
+
+  const grappleBeamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 10);
+  const grappleBeamMat = new THREE.MeshBasicMaterial({
+    color: 0x00f2fe,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const grappleBeamMesh = new THREE.Mesh(grappleBeamGeo, grappleBeamMat);
+  grappleBeamMesh.visible = false;
+  scene.add(grappleBeamMesh);
+
   const receiverGeo = new THREE.TorusGeometry(0.14, 0.012, 10, 28);
   const leftReceiverMat = new THREE.MeshBasicMaterial({
     color: 0x00f2fe,
@@ -721,6 +759,8 @@ function buildThreeWorld(mountEl) {
     scene,
     camera,
     renderer,
+    ambientLight,
+    rimDirLight,
     cyanPoleLight,
     goldOrbLight,
     backlitBackdrop,
@@ -730,7 +770,16 @@ function buildThreeWorld(mountEl) {
     skyscrapers,
     spotlightBeams,
     carMeshes,
+    weatherPoints,
+    weatherGeo,
+    weatherMat,
+    weatherCount,
     acrobatGroup,
+    vectorSilhouetteMat,
+    dorsalStripMat,
+    poleCoreMat,
+    poleLaserGlowMat,
+    poleGlowMesh,
     upperBodyGroup,
     torsoSpineGroup,
     headGroup,
@@ -742,6 +791,9 @@ function buildThreeWorld(mountEl) {
     ribbonPivot,
     ribbonJoint2,
     ribbonJoint3,
+    grappleLaserLine,
+    grappleLineGeo,
+    grappleBeamMesh,
     leftReceiverRing,
     rightReceiverRing,
     leftReceiverMat,
@@ -749,11 +801,13 @@ function buildThreeWorld(mountEl) {
     orbMeshes,
     worldLeftHand: new THREE.Vector3(),
     worldRightHand: new THREE.Vector3(),
+    grappleAnchor: new THREE.Vector3(),
+    activeCityIndex: -1,
   };
 }
 
 // ============================================================================
-// ACTUALIZACIÓN POR FRAME DEL MUNDO 3D — FLUIDEZ "VECTOR" + CÁMARA DINÁMICA
+// ACTUALIZACIÓN POR FRAME DEL MUNDO 3D — CAÍDA 3D, GANCHO, MODO FRENESÍ Y CLIMA
 // (CERO GARBAGE COLLECTION)
 // ============================================================================
 function updateAndRenderThreeScene(threeCtx, eng, dt) {
@@ -765,18 +819,98 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   const tiltRatio = Math.min(1, absAngle / CRITICAL_ANGLE_RAD);
   const speedMult = eng.walkSpeedMultiplier || 1.0;
 
+  // ============================================================================
+  // BLOQUE 4: IDENTIDAD ATMOSFÉRICA Y CLIMÁTICA 3D PARA LAS 20 CIUDADES
+  // ============================================================================
+  const city = eng.cfg?.city || CITIES[0];
+  if (threeCtx.activeCityIndex !== eng.cityIndex) {
+    threeCtx.activeCityIndex = eng.cityIndex;
+    const arch = city.weatherArchetype || 'urban';
+    if (arch === 'cyber_rain') {
+      threeCtx.scene.background.setHex(0x06091e);
+      threeCtx.scene.fog.color.setHex(0x0e1842);
+      threeCtx.weatherMat.color.setHex(0x00f2fe);
+      threeCtx.weatherMat.size = 0.16;
+    } else if (arch === 'golden_embers') {
+      threeCtx.scene.background.setHex(0x120918);
+      threeCtx.scene.fog.color.setHex(0x28172c);
+      threeCtx.weatherMat.color.setHex(0xfde047);
+      threeCtx.weatherMat.size = 0.18;
+    } else if (arch === 'blizzard') {
+      threeCtx.scene.background.setHex(0x061326);
+      threeCtx.scene.fog.color.setHex(0x102c4e);
+      threeCtx.weatherMat.color.setHex(0xe0f2fe);
+      threeCtx.weatherMat.size = 0.2;
+    } else {
+      threeCtx.scene.background.setHex(0x051124);
+      threeCtx.scene.fog.color.setHex(0x0a2239);
+      threeCtx.weatherMat.color.setHex(0x38bdf8);
+      threeCtx.weatherMat.size = 0.14;
+    }
+  }
+
+  // Actualizar partículas climáticas 3D en su BufferAttribute (cero GC)
+  const posAttr = threeCtx.weatherGeo.attributes.position;
+  const arr = posAttr.array;
+  const arch = city.weatherArchetype || 'urban';
+  const windX = (eng.windCurrent || 0) * (arch === 'blizzard' ? 14.0 : 9.5);
+  const fallSpeedY =
+    arch === 'cyber_rain'
+      ? -24.0
+      : arch === 'blizzard'
+        ? -6.5
+        : arch === 'golden_embers'
+          ? 2.2
+          : -1.8;
+
+  for (let i = 0; i < threeCtx.weatherCount; i++) {
+    const idx = i * 3;
+    arr[idx + 0] += windX * dt;
+    arr[idx + 1] += fallSpeedY * dt;
+
+    if (arr[idx + 0] > 15) arr[idx + 0] -= 30;
+    else if (arr[idx + 0] < -15) arr[idx + 0] += 30;
+
+    if (fallSpeedY < 0 && arr[idx + 1] < -8) {
+      arr[idx + 1] = 14;
+    } else if (fallSpeedY > 0 && arr[idx + 1] > 14) {
+      arr[idx + 1] = -8;
+    }
+
+    if (arr[idx + 2] > playerZ + 8) {
+      arr[idx + 2] -= 56;
+    } else if (arr[idx + 2] < playerZ - 50) {
+      arr[idx + 2] += 56;
+    }
+  }
+  posAttr.needsUpdate = true;
+
+  // ============================================================================
+  // BLOQUE 3.2: MODO FRENESÍ (NEON OVERDRIVE EN COMBO x10)
+  // ============================================================================
+  const isFever = eng.isFeverMode;
+  threeCtx.vectorSilhouetteMat.uniforms.uRimStrength.value = isFever ? 1.65 : 0.96;
+  threeCtx.vectorSilhouetteMat.uniforms.uRimColor.value.setHex(
+    isFever && Math.sin(eng.time * 18) > 0 ? 0xfde047 : 0x00f2fe
+  );
+  threeCtx.dorsalStripMat.opacity = isFever ? 0.95 : 0.45;
+  threeCtx.dorsalStripMat.color.setHex(isFever ? 0xfde047 : 0x00f2fe);
+  threeCtx.poleLaserGlowMat.opacity = isFever ? 0.82 : 0.42;
+  const poleScaleY = isFever ? 1.45 : 1.0;
+  threeCtx.poleGlowMesh.scale.set(poleScaleY, 1, poleScaleY);
+
+  // ============================================================================
+  // BLOQUE 2: SECUENCIA CINEMÁTICA 3D DE CAÍDA AL VACÍO + GANCHO SALVAVIDAS
+  // ============================================================================
   const lerpFast = Math.min(1, dt * 11);
   const lerpMed = Math.min(1, dt * 7.5);
 
-  // Flexión dinámica de rodillas bajando el centro de gravedad cuando crece el desequilibrio
   const targetKneeFlex = tiltRatio * 0.56 + (eng.fallSlowMo ? 0.22 : 0);
   eng.smoothKneeFlex += (targetKneeFlex - eng.smoothKneeFlex) * lerpFast;
 
-  // Contrapeso real de cadera en sentido opuesto (`hipOffsetX = -Math.sin(angle) * 0.25`)
   const targetHipOffsetX = -Math.sin(angle) * 0.25;
   eng.smoothHipX += (targetHipOffsetX - eng.smoothHipX) * lerpFast;
 
-  // Compensación elástica (`lerp`) de torso y cuello + "Salvada al Límite" (> 75% de inclinación crítica)
   const isNearCritical = absAngle > CRITICAL_ANGLE_RAD * 0.75 || eng.fallSlowMo;
   const targetEdgeSave = isNearCritical ? 1.0 : 0.0;
   eng.edgeSaveBlend += (targetEdgeSave - eng.edgeSaveBlend) * lerpFast;
@@ -787,12 +921,27 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   eng.smoothTorsoComp += (targetTorsoComp - eng.smoothTorsoComp) * lerpMed;
   eng.smoothNeckComp += (targetNeckComp - eng.smoothNeckComp) * lerpMed;
 
-  // Posicionar la base del acróbata en `(X: 0, Y: 0, Z: playerZ)` sobre el cable
-  threeCtx.acrobatGroup.position.set(0, 0, playerZ);
-  threeCtx.acrobatGroup.rotation.z = -angle * 0.72;
+  if (eng.fallSlowMo) {
+    // 2.1: Estado `falling`: El acróbata se desprende del cable y cae en el eje -Y girando hacia el abismo
+    threeCtx.acrobatGroup.position.set(eng.fallPosX, eng.fallPosY, playerZ);
+    threeCtx.acrobatGroup.rotation.z = -angle * 1.35;
+    threeCtx.acrobatGroup.rotation.x = eng.fallTumbleX;
+  } else if (eng.grappleRescueTimer > 0) {
+    // 2.2: Rescate físico con Gancho Salvavidas impulsando al acróbata de regreso a (0, 0, playerZ)
+    const rescueRatio = eng.grappleRescueTimer / 0.45;
+    const curX = eng.rescueStartX * rescueRatio;
+    const curY = eng.rescueStartY * rescueRatio;
+    threeCtx.acrobatGroup.position.set(curX, curY, playerZ);
+    threeCtx.acrobatGroup.rotation.z = -angle * rescueRatio;
+    threeCtx.acrobatGroup.rotation.x = 0;
+  } else {
+    threeCtx.acrobatGroup.position.set(0, 0, playerZ);
+    threeCtx.acrobatGroup.rotation.z = -angle * 0.72;
+    threeCtx.acrobatGroup.rotation.x = 0;
+  }
 
   // Ciclo de caminata elástico cuya amplitud y cadencia escalan con `walkSpeedMultiplier`
-  const isWalking = eng.gameStatus === 'PLAYING';
+  const isWalking = eng.gameStatus === 'PLAYING' && !eng.fallSlowMo;
   const stepSin = isWalking ? Math.sin(eng.stepPhase) : 0;
   const stepCos = isWalking ? Math.cos(eng.stepPhase) : 0;
   const strideAmp = Math.min(0.56, 0.34 * Math.pow(speedMult, 0.45));
@@ -804,7 +953,6 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.upperBodyGroup.position.x = eng.smoothHipX;
   threeCtx.upperBodyGroup.position.y = walkBobY - crouchDropY;
 
-  // Piernas articuladas: zancada acelerada + flexión dinámica de rodillas + pedaleo al límite
   const pedalWave = Math.sin(eng.time * 22) * eng.edgeSaveBlend;
   const kneeBendExtra = eng.smoothKneeFlex * 0.95;
 
@@ -834,7 +982,6 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
     -Math.max(0, -stepCos) * (strideAmp * 1.22) - kneeBendExtra * 1.1;
   threeCtx.rightLeg.bootGroup.rotation.x = kneeBendExtra * 0.52;
 
-  // Torso y cuello con interpolación elástica + inclinación aerodinámica según velocidad
   const forwardLean = isWalking ? Math.min(0.24, (speedMult - 1) * 0.14) : 0;
   threeCtx.torsoSpineGroup.rotation.z =
     eng.smoothTorsoComp + pedalWave * 0.08;
@@ -845,12 +992,13 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.headGroup.rotation.x =
     -forwardLean * 0.7 - eng.smoothKneeFlex * 0.14 - eng.edgeSaveBlend * 0.2;
 
-  // Brazos: respuesta táctil + cadencia de paso + retroceso por captura (`catchRecoil`)
   const leftLift = eng.leftPressed ? 0.28 : 0;
-  const rightLift = eng.rightPressed ? 0.28 : 0;
+  const rightLift =
+    eng.grappleRescueTimer > 0 ? 1.45 : eng.rightPressed ? 0.28 : 0;
   const armSwing = stepSin * 0.12 * speedMult;
   threeCtx.leftArm.shoulderGroup.rotation.x = -armSwing + pedalWave * 0.55;
-  threeCtx.rightArm.shoulderGroup.rotation.x = armSwing - pedalWave * 0.55;
+  threeCtx.rightArm.shoulderGroup.rotation.x =
+    eng.grappleRescueTimer > 0 ? -1.35 : armSwing - pedalWave * 0.55;
   threeCtx.leftArm.shoulderGroup.rotation.z =
     -eng.smoothTorsoComp * 0.4 - eng.edgeSaveBlend * 0.22;
   threeCtx.rightArm.shoulderGroup.rotation.z =
@@ -859,11 +1007,9 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.leftArm.elbowGroup.rotation.x = leftLift + eng.edgeSaveBlend * 0.25;
   threeCtx.rightArm.elbowGroup.rotation.x = rightLift + eng.edgeSaveBlend * 0.25;
 
-  // Vara láser de equilibrio actuando como balancín físico activo
   threeCtx.poleGroup.rotation.z =
     (rightLift - leftLift) * 0.38 - angle * 0.42 + pedalWave * 0.14;
 
-  // Cinta aerodinámica cian de 3 eslabones ondeando al viento y a la velocidad de carrera
   const windVal = eng.windCurrent || 0;
   const ribbonFreq = 10.5 * Math.min(1.6, speedMult);
   threeCtx.ribbonPivot.rotation.y =
@@ -874,7 +1020,6 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.ribbonJoint3.rotation.y =
     Math.sin(eng.time * (ribbonFreq * 1.6) - 1.6) * 0.34 + windVal * 0.25;
 
-  // Mantener el telón de contraluz atmosférico al fondo y animar haces de luz nocturnos
   threeCtx.backlitBackdrop.position.z = playerZ - 210;
   threeCtx.arrivalGroup.position.set(0, 0, -eng.targetDistance - 3.5);
   const pulse = 1 + Math.sin(eng.time * 5) * 0.08;
@@ -891,7 +1036,6 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
     }
   }
 
-  // Reciclar rascacielos laterales y tránsito a medida que el jugador avanza
   for (let i = 0; i < threeCtx.skyscrapers.length; i++) {
     const bMesh = threeCtx.skyscrapers[i];
     if (bMesh.position.z > playerZ + 18) {
@@ -911,13 +1055,37 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
     }
   }
 
-  // Actualizar matriz del personaje para obtener la posición mundial 3D exacta de ambas manos
   threeCtx.acrobatGroup.updateMatrixWorld(true);
   threeCtx.leftArm.handMesh.getWorldPosition(threeCtx.worldLeftHand);
   threeCtx.rightArm.handMesh.getWorldPosition(threeCtx.worldRightHand);
 
   const lPos = threeCtx.worldLeftHand;
   const rPos = threeCtx.worldRightHand;
+
+  // Renderizado del rayo láser cian 3D del Gancho Salvavidas desde la mano hasta el cable superior
+  if (eng.grappleRescueTimer > 0) {
+    threeCtx.grappleLaserLine.visible = true;
+    threeCtx.grappleBeamMesh.visible = true;
+    threeCtx.grappleAnchor.set(0, 0, playerZ - 1.2);
+
+    const gArr = threeCtx.grappleLineGeo.attributes.position.array;
+    gArr[0] = rPos.x;
+    gArr[1] = rPos.y;
+    gArr[2] = rPos.z;
+    gArr[3] = threeCtx.grappleAnchor.x;
+    gArr[4] = threeCtx.grappleAnchor.y;
+    gArr[5] = threeCtx.grappleAnchor.z;
+    threeCtx.grappleLineGeo.attributes.position.needsUpdate = true;
+
+    const dist = rPos.distanceTo(threeCtx.grappleAnchor);
+    threeCtx.grappleBeamMesh.position.lerpVectors(rPos, threeCtx.grappleAnchor, 0.5);
+    threeCtx.grappleBeamMesh.scale.set(1, Math.max(0.1, dist), 1);
+    threeCtx.grappleBeamMesh.lookAt(threeCtx.grappleAnchor);
+    threeCtx.grappleBeamMesh.rotateX(Math.PI / 2);
+  } else {
+    threeCtx.grappleLaserLine.visible = false;
+    threeCtx.grappleBeamMesh.visible = false;
+  }
 
   // Posicionar Aros Receptores 3D en las manos y detectar ventana de captura
   let leftReady = false;
@@ -939,11 +1107,11 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   threeCtx.leftReceiverRing.scale.set(lScale, lScale, lScale);
   threeCtx.rightReceiverRing.scale.set(rScale, rScale, rScale);
 
-  // Parábola 3D de las Esferas Doradas Incandescentes con Estela de Luz
+  // Parábola 3D de las Esferas Doradas Incandescentes con Estela de Luz (intensificada en Modo Frenesí)
   for (let i = 0; i < 4; i++) {
     const b = eng.jugglePool[i];
     const orbObj = threeCtx.orbMeshes[i];
-    if (!b.active) {
+    if (!b.active || eng.fallSlowMo) {
       orbObj.group.visible = false;
       for (let tIdx = 0; tIdx < orbObj.trails.length; tIdx++) {
         orbObj.trails[tIdx].visible = false;
@@ -964,12 +1132,13 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
 
     orbObj.group.position.set(ox, oy, oz);
     const inCatch = p >= eng.catchThreshold;
-    const orbScale = inCatch ? 1.28 : 1.0;
+    const orbScale = inCatch ? 1.28 : isFever ? 1.15 : 1.0;
     orbObj.group.scale.set(orbScale, orbScale, orbScale);
 
+    const trailSpacing = isFever ? 0.028 : 0.036;
     for (let tIdx = 0; tIdx < orbObj.trails.length; tIdx++) {
       const tMesh = orbObj.trails[tIdx];
-      const tp = p - (tIdx + 1) * 0.036;
+      const tp = p - (tIdx + 1) * trailSpacing;
       if (tp <= 0.01) {
         tMesh.visible = false;
         continue;
@@ -987,9 +1156,10 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
   }
 
   threeCtx.cyanPoleLight.position.set(0, 1.35, playerZ);
+  threeCtx.cyanPoleLight.intensity = isFever ? 6.8 : 3.8;
   threeCtx.goldOrbLight.position.set(0, 2.45, playerZ - 0.25);
 
-  // Cámara con Zoom Dinámico de Adrenalina (`camera.fov`, distancia y `cameraRoll`)
+  // Cámara con Zoom Dinámico de Adrenalina y seguimiento 3D durante la caída al vacío
   const comboFactor = Math.min(1, (eng.combo || 0) / 14);
   const dangerZone = Math.min(
     1,
@@ -1024,11 +1194,17 @@ function updateAndRenderThreeScene(threeCtx, eng, dt) {
     eng.dynamicCamY + shakeY,
     playerZ + eng.dynamicCamDist
   );
-  threeCtx.camera.lookAt(
-    eng.smoothHipX * 0.35,
-    1.65 - eng.smoothKneeFlex * 0.2,
-    playerZ - 15
-  );
+
+  if (eng.fallSlowMo) {
+    // 2.1: La cámara se inclina hacia abajo siguiendo la caída del acróbata al abismo
+    threeCtx.camera.lookAt(threeCtx.acrobatGroup.position);
+  } else {
+    threeCtx.camera.lookAt(
+      eng.smoothHipX * 0.35,
+      1.65 - eng.smoothKneeFlex * 0.2,
+      playerZ - 15
+    );
+  }
   threeCtx.camera.rotation.z = -eng.cameraRoll * (0.52 + tensionFactor * 0.65);
 
   threeCtx.renderer.render(threeCtx.scene, threeCtx.camera);
@@ -1096,6 +1272,10 @@ export default function App() {
   const [shopNotice, setShopNotice] = useState('');
   const [seasonClock, setSeasonClock] = useState(() => getSeasonTimeRemaining());
 
+  // Estados efímeros de feedback visual flotante (Bloque 3)
+  const [handPopup, setHandPopup] = useState(null);
+  const [nearMissBanner, setNearMissBanner] = useState(0);
+
   const [hudState, setHudState] = useState({
     angleDeg: 0,
     distance: 0,
@@ -1104,10 +1284,11 @@ export default function App() {
     juggleCount: 1,
     multiplier: 1,
     combo: 0,
+    isFeverMode: false,
     windCurrent: 0,
     windWarningActive: false,
     fallSlowMo: false,
-    slowMoTimer: 3.2,
+    slowMoTimer: 1.25,
     leftPressed: false,
     rightPressed: false,
     leftTimingReady: false,
@@ -1188,6 +1369,20 @@ export default function App() {
       dynamicFov: 58,
       dynamicCamDist: 6.2,
       dynamicCamY: 3.38,
+      // Estados Bloque 2 y Bloque 3 (Caída 3D, Gancho, Salvada al Límite y Modo Frenesí)
+      fallSlowMo: false,
+      slowMoTimer: 1.25,
+      fallPosX: 0,
+      fallPosY: 0,
+      fallVelocityY: 0,
+      fallTumbleX: 0,
+      grappleRescueTimer: 0,
+      rescueStartX: 0,
+      rescueStartY: 0,
+      immunityTimer: 0,
+      criticalTiltDuration: 0,
+      nearMissArmed: false,
+      isFeverMode: false,
       juggleCount: 1,
       combo: 0,
       maxCombo: 0,
@@ -1196,8 +1391,6 @@ export default function App() {
       lpEarnedRun: 0,
       leftPressed: false,
       rightPressed: false,
-      fallSlowMo: false,
-      slowMoTimer: 3.2,
       shake: 0,
       grappleFlash: 0,
       poleLevel: saved?.gearLevels?.pole || 1,
@@ -1314,6 +1507,19 @@ export default function App() {
       eng.dynamicFov = 58;
       eng.dynamicCamDist = 6.2;
       eng.dynamicCamY = 3.38;
+      eng.fallSlowMo = false;
+      eng.slowMoTimer = 1.25;
+      eng.fallPosX = 0;
+      eng.fallPosY = 0;
+      eng.fallVelocityY = 0;
+      eng.fallTumbleX = 0;
+      eng.grappleRescueTimer = 0;
+      eng.rescueStartX = 0;
+      eng.rescueStartY = 0;
+      eng.immunityTimer = 0;
+      eng.criticalTiltDuration = 0;
+      eng.nearMissArmed = false;
+      eng.isFeverMode = false;
       eng.juggleCount = 1;
       eng.combo = 0;
       eng.maxCombo = 0;
@@ -1322,14 +1528,11 @@ export default function App() {
       eng.lpEarnedRun = 0;
       eng.leftPressed = false;
       eng.rightPressed = false;
-      eng.fallSlowMo = false;
-      eng.slowMoTimer = 3.2;
       eng.shake = 0;
       eng.grappleFlash = 0;
       eng.gameStatus = nextStatus;
       eng.paused = false;
 
-      // Velocidad de vuelo de las esferas escalando con `walkSpeedMultiplier * 1.15`
       for (let i = 0; i < eng.jugglePool.length; i++) {
         const b = eng.jugglePool[i];
         b.active = i === 0;
@@ -1348,10 +1551,11 @@ export default function App() {
         juggleCount: 1,
         multiplier: currentPropObj.mult * currentSkinObj.bonusMult,
         combo: 0,
+        isFeverMode: false,
         windCurrent: eng.windCurrent,
         windWarningActive: false,
         fallSlowMo: false,
-        slowMoTimer: 3.2,
+        slowMoTimer: 1.25,
         leftPressed: false,
         rightPressed: false,
         leftTimingReady: false,
@@ -1363,11 +1567,12 @@ export default function App() {
 
   const startRun = useCallback(() => {
     soundEngine.init();
-    soundEngine.playCatch(2);
+    soundEngine.playCatchSound(2, false);
     resetEngineForLevel(currentLevel, 'PLAYING');
   }, [currentLevel, resetEngineForLevel]);
 
   const handleAddJuggleObject = useCallback(() => {
+    soundEngine.init();
     const eng = engineRef.current;
     if (eng.gameStatus !== 'PLAYING' || eng.juggleCount >= 4) return;
 
@@ -1379,74 +1584,94 @@ export default function App() {
     item.targetHand = nextIdx % 2 === 0 ? 'R' : 'L';
     eng.juggleCount += 1;
 
-    soundEngine.playCatch(eng.juggleCount + 2);
+    soundEngine.playCatchSound(eng.juggleCount + 2, true);
   }, []);
 
-  const attemptHandCatch = useCallback((handChar) => {
-    const eng = engineRef.current;
-    if (eng.gameStatus !== 'PLAYING' || eng.paused || eng.fallSlowMo) return false;
+  const attemptHandCatch = useCallback(
+    (handChar) => {
+      const eng = engineRef.current;
+      if (eng.gameStatus !== 'PLAYING' || eng.paused || eng.fallSlowMo) return false;
 
-    let caughtAny = false;
-    const threshold = eng.catchThreshold;
+      let caughtAny = false;
+      const threshold = eng.catchThreshold;
 
-    for (let i = 0; i < eng.jugglePool.length; i++) {
-      const obj = eng.jugglePool[i];
-      if (!obj.active) continue;
-      if (obj.targetHand === handChar && obj.phase >= threshold) {
-        const isPerfect = obj.phase >= 0.88;
-        obj.phase = 0;
-        obj.speed = eng.cfg.juggleBaseSpeed;
-        obj.targetHand = handChar === 'L' ? 'R' : 'L';
+      for (let i = 0; i < eng.jugglePool.length; i++) {
+        const obj = eng.jugglePool[i];
+        if (!obj.active) continue;
+        if (obj.targetHand === handChar && obj.phase >= threshold) {
+          const isPerfect = obj.phase >= 0.88;
+          obj.phase = 0;
+          obj.speed = eng.cfg.juggleBaseSpeed;
+          obj.targetHand = handChar === 'L' ? 'R' : 'L';
 
-        eng.combo += 1;
-        if (eng.combo > eng.maxCombo) eng.maxCombo = eng.combo;
-        eng.catchesRun += 1;
+          eng.combo += 1;
+          if (eng.combo > eng.maxCombo) eng.maxCombo = eng.combo;
+          eng.catchesRun += 1;
 
-        // BLOQUE 1.2: Retroceso por Captura de Malabar (`catchRecoil`) desde el Nivel 4
-        // Aplica un micro-impulso de inclinación hacia ese brazo (`±0.06 * difficultyFactor` rad/s)
-        if (eng.level >= 4) {
-          const recoilSign = handChar === 'L' ? -1 : 1;
-          const catchRecoil = recoilSign * 0.06 * (eng.difficultyFactor || eng.walkSpeedMultiplier);
-          eng.angularVelocity += catchRecoil;
-        } else {
-          eng.angularVelocity *= 0.82;
-          eng.angle *= 0.92;
+          // Bloque 3.2: Activar Modo Frenesí al llegar a Combo x10
+          eng.isFeverMode = eng.combo >= 10;
+
+          if (eng.level >= 4) {
+            const recoilSign = handChar === 'L' ? -1 : 1;
+            const catchRecoil =
+              recoilSign * 0.06 * (eng.difficultyFactor || eng.walkSpeedMultiplier);
+            eng.angularVelocity += catchRecoil;
+          } else {
+            eng.angularVelocity *= 0.82;
+            eng.angle *= 0.92;
+          }
+          eng.angleRad = eng.angle;
+          eng.angleDeg = (eng.angle * 180) / Math.PI;
+
+          // En Modo Frenesí la ganancia de monedas se multiplica x2
+          const feverCoinMult = eng.isFeverMode ? 2 : 1;
+          const totalMult =
+            eng.juggleCount *
+            (eng.propObj?.mult || 1) *
+            (eng.skinObj?.bonusMult || 1) *
+            feverCoinMult;
+          const coinGain = Math.max(1, Math.round((isPerfect ? 6 : 3) * totalMult));
+          const lpGain = Math.max(1, Math.round((isPerfect ? 4 : 2) * eng.juggleCount));
+
+          eng.coinsEarnedRun += coinGain;
+          eng.lpEarnedRun += lpGain;
+
+          setCoins((c) => c + coinGain);
+          setLeaguePoints((lp) => lp + lpGain);
+
+          if (eng.catchesRun % 8 === 0) {
+            setGems((g) => g + 1);
+          }
+
+          // Bloque 1.1: Notas pentatónicas + octava brillante y vibración de 12ms en captura perfecta
+          soundEngine.playCatchSound(eng.combo, isPerfect);
+
+          // Bloque 3.3: Feedback Flotante de Captura en ese lado (`¡PERFECTO! x4`, `¡BIEN! x2`)
+          setHandPopup({
+            id: Date.now() + Math.random(),
+            side: handChar === 'L' ? 'left' : 'right',
+            isPerfect,
+            text: `${
+              isPerfect
+                ? (I18N[lang] || I18N.es).perfectCatchLabel
+                : (I18N[lang] || I18N.es).goodCatchLabel
+            } x${eng.combo}`,
+          });
+
+          caughtAny = true;
+          break;
         }
-        eng.angleRad = eng.angle;
-        eng.angleDeg = (eng.angle * 180) / Math.PI;
-
-        const totalMult =
-          eng.juggleCount *
-          (eng.propObj?.mult || 1) *
-          (eng.skinObj?.bonusMult || 1);
-        const coinGain = Math.max(1, Math.round((isPerfect ? 6 : 3) * totalMult));
-        const lpGain = Math.max(1, Math.round((isPerfect ? 4 : 2) * eng.juggleCount));
-
-        eng.coinsEarnedRun += coinGain;
-        eng.lpEarnedRun += lpGain;
-
-        setCoins((c) => c + coinGain);
-        setLeaguePoints((lp) => lp + lpGain);
-
-        if (eng.catchesRun % 8 === 0) {
-          setGems((g) => g + 1);
-        }
-
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate(isPerfect ? 18 : 10);
-        }
-
-        soundEngine.playCatch(eng.combo);
-        caughtAny = true;
-        break;
       }
-    }
-    return caughtAny;
-  }, []);
+      return caughtAny;
+    },
+    [lang]
+  );
 
+  // Bloque 2.2: Rescate Físico 3D con el Gancho Salvavidas + 1.5s de inmunidad estabilizada
   const handleGrappleSave = useCallback(() => {
+    soundEngine.init();
     const eng = engineRef.current;
-    if (eng.gameStatus !== 'PLAYING') return;
+    if (eng.gameStatus !== 'PLAYING' && eng.gameStatus !== 'GAMEOVER') return;
 
     if (gems < 20) {
       setActiveModal('SHOP');
@@ -1455,18 +1680,26 @@ export default function App() {
     }
 
     setGems((g) => g - 20);
+    eng.rescueStartX = eng.fallSlowMo ? eng.fallPosX : Math.sin(eng.angle) * 0.5;
+    eng.rescueStartY = eng.fallSlowMo ? Math.min(-0.8, eng.fallPosY) : -0.6;
+    eng.grappleRescueTimer = 0.45;
+    eng.immunityTimer = 1.5;
+
     eng.angle = 0;
     eng.angleRad = 0;
     eng.angleDeg = 0;
     eng.angularVelocity = 0;
     eng.fallSlowMo = false;
-    eng.slowMoTimer = 3.2;
+    eng.slowMoTimer = 1.25;
+    eng.fallPosX = 0;
+    eng.fallPosY = 0;
+    eng.fallVelocityY = 0;
+    eng.fallTumbleX = 0;
     eng.grappleFlash = 1.0;
     eng.shake = 0;
+    eng.gameStatus = 'PLAYING';
+    setGameStatus('PLAYING');
 
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([25, 40, 25]);
-    }
     soundEngine.playGrapple();
   }, [gems]);
 
@@ -1578,25 +1811,35 @@ export default function App() {
         if (eng.grappleFlash > 0) {
           eng.grappleFlash = Math.max(0, eng.grappleFlash - dt * 2.4);
         }
+        if (eng.grappleRescueTimer > 0) {
+          eng.grappleRescueTimer = Math.max(0, eng.grappleRescueTimer - dt);
+        }
+        if (eng.immunityTimer > 0) {
+          eng.immunityTimer = Math.max(0, eng.immunityTimer - dt);
+        }
         if (eng.shake > 0) {
           eng.shake = Math.max(0, eng.shake - dt * 4.5);
         }
 
         if (eng.gameStatus === 'PLAYING') {
           if (eng.fallSlowMo) {
+            // BLOQUE 2.1: 1.2 segundos de caída cinemática 3D en el eje -Y hacia el abismo
             eng.slowMoTimer -= dt;
-            eng.angle += (eng.angle >= 0 ? 1 : -1) * 0.08 * dt;
+            eng.fallVelocityY -= 16.8 * dt;
+            eng.fallPosY += eng.fallVelocityY * dt;
+            eng.fallPosX += (eng.angle >= 0 ? 1 : -1) * 2.4 * dt;
+            eng.fallTumbleX += dt * 2.8;
+            eng.angle += (eng.angle >= 0 ? 1 : -1) * 0.35 * dt;
             eng.angleRad = eng.angle;
             eng.angleDeg = (eng.angle * 180) / Math.PI;
 
             if (eng.slowMoTimer <= 0) {
               eng.fallSlowMo = false;
               eng.gameStatus = 'GAMEOVER';
-              soundEngine.playFall();
               setGameStatus('GAMEOVER');
             }
           } else {
-            // BLOQUE 1.2: Ráfagas de Viento Cruzado (Desde Nivel 4) anunciadas 1s antes
+            // Ráfagas de Viento Cruzado (Desde Nivel 4) anunciadas 1s antes con sonido filtrado
             eng.windTimer += dt;
             if (eng.level >= 4 && eng.windTimer >= eng.windChangeFreq - 1.0) {
               if (!eng.windWarningActive) {
@@ -1629,13 +1872,11 @@ export default function App() {
             const shoesFactor = 1 - (eng.bootsLevel - 1) * 0.052;
             const thumbPower = 4.55 + (eng.poleLevel - 1) * 0.15;
 
-            // 1.1: Velocidad de caminata y cadencia acopladas a `walkSpeedMultiplier`
             const speedBonus = 1 + (eng.bootsLevel - 1) * 0.025;
             const stepAdvance = eng.walkSpeed * speedBonus * dt;
             eng.distance = Math.min(eng.targetDistance, eng.distance + stepAdvance);
             eng.stepPhase += dt * 7.2 * eng.walkSpeedMultiplier * speedBonus;
 
-            // 1.2: Rebote de Pisada (`stepSway`) exacto: Math.sin(stepPhase) * 0.45 * Math.pow(walkSpeedMultiplier, 1.35)
             const stepSway =
               Math.sin(eng.stepPhase) *
               0.45 *
@@ -1648,12 +1889,49 @@ export default function App() {
             const gravityTorque =
               Math.sin(eng.angle) * cfg.gravityInstability * 2.55 * poleFactor;
             const windTorque = eng.windCurrent * shoesFactor * 1.65;
-            eng.angularVelocity +=
-              (gravityTorque + windTorque + stepSway + thumbTorque) * dt;
-            eng.angularVelocity *= Math.pow(0.92, dt * 60);
-            eng.angle += eng.angularVelocity * dt;
+
+            if (eng.immunityTimer > 0) {
+              // Durante los 1.5s de inmunidad tras el rescate con gancho, estabilizar suavemente
+              eng.angularVelocity = 0;
+              eng.angle *= Math.pow(0.82, dt * 60);
+            } else {
+              eng.angularVelocity +=
+                (gravityTorque + windTorque + stepSway + thumbTorque) * dt;
+              // Bloque 3.2: En Modo Frenesí (Combo >= 10) la amortiguación de giro mejora un 15%
+              const dampingBase = eng.isFeverMode ? 0.905 : 0.92;
+              eng.angularVelocity *= Math.pow(dampingBase, dt * 60);
+              eng.angle += eng.angularVelocity * dt;
+            }
             eng.angleRad = eng.angle;
             eng.angleDeg = (eng.angle * 180) / Math.PI;
+
+            const absAngle = Math.abs(eng.angle);
+
+            // BLOQUE 1.2: Cuando la inclinación supera el 75% del ángulo límite, latido grave 65Hz + vibración 20ms
+            if (absAngle > CRITICAL_ANGLE_RAD * 0.75) {
+              soundEngine.playHeartbeatIfDanger(timestamp);
+            }
+
+            // BLOQUE 3.1: Mecánica de "Salvada al Límite" (Near-Miss Bonus)
+            if (absAngle > CRITICAL_ANGLE_RAD * 0.78) {
+              eng.criticalTiltDuration += dt;
+              if (eng.criticalTiltDuration >= 0.35) {
+                eng.nearMissArmed = true;
+              }
+            } else if (absAngle < CRITICAL_ANGLE_RAD * 0.3) {
+              if (eng.nearMissArmed) {
+                eng.nearMissArmed = false;
+                eng.criticalTiltDuration = 0;
+                eng.coinsEarnedRun += 5;
+                eng.lpEarnedRun += 100;
+                setCoins((c) => c + 5);
+                setLeaguePoints((lp) => lp + 100);
+                soundEngine.playNearMissSave();
+                setNearMissBanner(Date.now());
+              } else {
+                eng.criticalTiltDuration = 0;
+              }
+            }
 
             for (let i = 0; i < eng.jugglePool.length; i++) {
               const ball = eng.jugglePool[i];
@@ -1677,19 +1955,27 @@ export default function App() {
                 const missDir = ball.targetHand === 'L' ? -1 : 1;
                 ball.targetHand = ball.targetHand === 'L' ? 'R' : 'L';
                 eng.combo = 0;
-                // Rebote en mano con impulso adicional desde Nivel 4
+                eng.isFeverMode = false;
                 const missRecoil =
                   eng.level >= 4
                     ? missDir * (0.68 + 0.06 * (eng.difficultyFactor || 1)) * poleFactor
                     : missDir * 0.65 * poleFactor;
-                eng.angularVelocity += missRecoil;
+                if (eng.immunityTimer <= 0) {
+                  eng.angularVelocity += missRecoil;
+                }
                 eng.shake = 2.8;
               }
             }
 
-            if (Math.abs(eng.angle) >= CRITICAL_ANGLE_RAD) {
+            // Iniciar secuencia cinemática 3D de caída al vacío (1.2s) cuando supera el ángulo límite
+            if (absAngle >= CRITICAL_ANGLE_RAD && eng.immunityTimer <= 0) {
               eng.fallSlowMo = true;
-              eng.slowMoTimer = 3.2;
+              eng.slowMoTimer = 1.25;
+              eng.fallPosX = Math.sin(eng.angle) * 0.35;
+              eng.fallPosY = -0.08;
+              eng.fallVelocityY = -2.4;
+              eng.fallTumbleX = 0.15;
+              eng.isFeverMode = false;
               eng.shake = 4.0;
               soundEngine.playFall();
             }
@@ -1708,7 +1994,7 @@ export default function App() {
               setLeaguePoints((lp) => lp + clearBonusLP);
               setMaxUnlockedLevel((m) => Math.max(m, Math.min(100, eng.level + 1)));
 
-              soundEngine.playLevelWin();
+              soundEngine.playVictory();
               setGameStatus('VICTORY');
             }
           }
@@ -1746,10 +2032,12 @@ export default function App() {
           }
         }
 
+        const feverMult = eng.isFeverMode ? 2 : 1;
         const totalMult =
           eng.juggleCount *
           (eng.propObj?.mult || 1) *
-          (eng.skinObj?.bonusMult || 1);
+          (eng.skinObj?.bonusMult || 1) *
+          feverMult;
 
         setHudState({
           angleDeg: eng.angleDeg || 0,
@@ -1759,6 +2047,7 @@ export default function App() {
           juggleCount: eng.juggleCount,
           multiplier: totalMult,
           combo: eng.combo,
+          isFeverMode: eng.isFeverMode,
           windCurrent: eng.windCurrent,
           windWarningActive: eng.windWarningActive,
           fallSlowMo: eng.fallSlowMo,
@@ -1785,6 +2074,7 @@ export default function App() {
   }, [attemptHandCatch]);
 
   const handleUpgradeGear = (item) => {
+    soundEngine.init();
     const curLvl = gearLevels[item.id] || 1;
     if (curLvl >= item.maxLevel) return;
     const cost = Math.round(item.baseCost * Math.pow(item.costScale, curLvl - 1));
@@ -1792,51 +2082,54 @@ export default function App() {
 
     setCoins((c) => c - cost);
     setGearLevels((prev) => ({ ...prev, [item.id]: curLvl + 1 }));
-    soundEngine.playCatch(curLvl + 3);
+    soundEngine.playCatchSound(curLvl + 3, true);
   };
 
   const handleSkinAction = (skin) => {
+    soundEngine.init();
     if (unlockedSkins.includes(skin.id)) {
       setEquippedSkin(skin.id);
-      soundEngine.playCatch(2);
+      soundEngine.playCatchSound(2, false);
       return;
     }
     if (skin.currency === 'coins' && coins >= skin.cost) {
       setCoins((c) => c - skin.cost);
       setUnlockedSkins((u) => [...u, skin.id]);
       setEquippedSkin(skin.id);
-      soundEngine.playLevelWin();
+      soundEngine.playVictory();
     } else if (skin.currency === 'gems' && gems >= skin.cost) {
       setGems((g) => g - skin.cost);
       setUnlockedSkins((u) => [...u, skin.id]);
       setEquippedSkin(skin.id);
-      soundEngine.playLevelWin();
+      soundEngine.playVictory();
     }
   };
 
   const handlePropAction = (prop) => {
+    soundEngine.init();
     if (unlockedProps.includes(prop.id)) {
       setEquippedProp(prop.id);
-      soundEngine.playCatch(3);
+      soundEngine.playCatchSound(3, false);
       return;
     }
     if (prop.currency === 'coins' && coins >= prop.cost) {
       setCoins((c) => c - prop.cost);
       setUnlockedProps((u) => [...u, prop.id]);
       setEquippedProp(prop.id);
-      soundEngine.playLevelWin();
+      soundEngine.playVictory();
     } else if (prop.currency === 'gems' && gems >= prop.cost) {
       setGems((g) => g - prop.cost);
       setUnlockedProps((u) => [...u, prop.id]);
       setEquippedProp(prop.id);
-      soundEngine.playLevelWin();
+      soundEngine.playVictory();
     }
   };
 
   const handleClaimStoreBundle = (bundle) => {
+    soundEngine.init();
     setGems((g) => g + bundle.gems);
     setCoins((c) => c + bundle.coins);
-    soundEngine.playLevelWin();
+    soundEngine.playVictory();
     setShopNotice(`+${bundle.gems} 💎  +${bundle.coins} 🪙`);
     setTimeout(() => setShopNotice(''), 2500);
   };
@@ -1985,7 +2278,10 @@ export default function App() {
               <button
                 type="button"
                 className="mini-pill"
-                onClick={() => setSoundOn((s) => !s)}
+                onClick={() => {
+                  soundEngine.init();
+                  setSoundOn((s) => !s);
+                }}
               >
                 {soundOn ? '🔊' : '🔇'}
               </button>
@@ -2004,7 +2300,9 @@ export default function App() {
       {/* ==================== BARRA SUPERIOR TRANSLÚCIDA COMPACTA EN PARTIDA ==================== */}
       {gameStatus === 'PLAYING' && (
         <>
-          <section className="compact-play-hud">
+          <section
+            className={`compact-play-hud ${hudState.isFeverMode ? 'fever-active' : ''}`}
+          >
             <div className="compact-hud-top-row">
               <div className="compact-hud-city">
                 <span>{currentCity.flag}</span>
@@ -2029,6 +2327,19 @@ export default function App() {
                   <span>x{hudState.multiplier}</span>
                 </div>
 
+                {/* Botón de Mute directo en el HUD superior */}
+                <button
+                  type="button"
+                  className="compact-pause-btn"
+                  title="Mute / Audio"
+                  onClick={() => {
+                    soundEngine.init();
+                    setSoundOn((s) => !s);
+                  }}
+                >
+                  {soundOn ? '🔊' : '🔇'}
+                </button>
+
                 <button
                   type="button"
                   className="compact-pause-btn"
@@ -2051,9 +2362,13 @@ export default function App() {
                 <div className="balance-axis-center-notch" />
                 <div ref={needleRef} className="balance-axis-needle" />
               </div>
-              <span className="balance-axis-label" style={{ color: '#fde047' }}>
-                🔥{hudState.combo}
-              </span>
+              {hudState.isFeverMode ? (
+                <span className="fever-mode-pill">{t.feverModeBadge}</span>
+              ) : (
+                <span className="balance-axis-label" style={{ color: '#fde047' }}>
+                  🔥{hudState.combo}
+                </span>
+              )}
             </div>
           </section>
 
@@ -2061,6 +2376,25 @@ export default function App() {
           {hudState.windWarningActive && (
             <div className="wind-gust-alert-pill">
               <span>{t.windGustAlert}</span>
+            </div>
+          )}
+
+          {/* Bloque 3.1: Texto Flotante Dinámico de "Salvada al Límite" (+100 PTS, +5 Monedas) */}
+          {nearMissBanner > 0 && (
+            <div key={nearMissBanner} className="near-miss-floater">
+              {t.nearMissPopup}
+            </div>
+          )}
+
+          {/* Bloque 3.3: Feedback Flotante Efímero de Captura en Mano Izquierda / Derecha */}
+          {handPopup && (
+            <div
+              key={handPopup.id}
+              className={`hand-catch-floater ${handPopup.side} ${
+                handPopup.isPerfect ? 'perfect' : 'good'
+              }`}
+            >
+              {handPopup.text}
             </div>
           )}
         </>
@@ -2160,7 +2494,7 @@ export default function App() {
                   justifyContent: 'space-between',
                 }}
               >
-                <span>{currentCity.landmark[lang]}</span>
+                <span>{currentCity.weatherLabel[lang]}</span>
                 <span>
                   🪙 {coins} | 💎 {gems}
                 </span>
@@ -2248,7 +2582,7 @@ export default function App() {
           </div>
 
           <div className="vector-minimal-hud">
-            {/* Indicador translúcidos ultrafino esquina inferior izquierda */}
+            {/* Indicador translúcido ultrafino esquina inferior izquierda */}
             <div
               className={`vector-corner-indicator left ${
                 hudState.leftPressed ? 'pressed' : ''
@@ -2258,7 +2592,7 @@ export default function App() {
               <div className="vector-corner-line" />
             </div>
 
-            {/* Micro-píldoras centrales discretas (+1 esfera y salvada de emergencia) */}
+            {/* Micro-píldoras centrales discretas (+1 esfera y salvada de emergencia con Gancho 3D) */}
             <div className="vector-center-micro-bar">
               {hudState.juggleCount < 4 && (
                 <button
@@ -2504,7 +2838,7 @@ export default function App() {
                         {city.flag} {cIdx + 1}. {city.name[lang]}
                       </span>
                       <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                        {city.landmark[lang]}
+                        {city.weatherLabel[lang]}
                       </span>
                     </div>
 
@@ -2866,22 +3200,7 @@ export default function App() {
               <button
                 type="button"
                 className="cta-giant-btn"
-                onClick={() => {
-                  if (gems >= 20) {
-                    setGems((g) => g - 20);
-                    const eng = engineRef.current;
-                    eng.angle = 0;
-                    eng.angleRad = 0;
-                    eng.angleDeg = 0;
-                    eng.angularVelocity = 0;
-                    eng.fallSlowMo = false;
-                    eng.gameStatus = 'PLAYING';
-                    soundEngine.playGrapple();
-                    setGameStatus('PLAYING');
-                  } else {
-                    setActiveModal('SHOP');
-                  }
-                }}
+                onClick={handleGrappleSave}
               >
                 🪝 {t.continueHook}
               </button>
