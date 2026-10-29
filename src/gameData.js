@@ -25,12 +25,15 @@ export function getCountryOption(codeOrFlag) {
   return found || COUNTRIES_LIST[0];
 }
 
+// ============================================================================
+// BLOQUE 5: 20 CIUDADES DE CAMPAÑA CON MONUMENTOS 3D ICÓNICOS EN EL HORIZONTE
+// ============================================================================
 export const CITIES = [
   {
     index: 0,
     flag: '🇦🇷',
     name: { es: 'Buenos Aires', en: 'Buenos Aires' },
-    monumentName: { es: 'Obelisco y Puerto Madero', en: 'Obelisk & Puerto Madero' },
+    monumentName: { es: 'Obelisco y Puente de la Mujer', en: 'Obelisk & Puente de la Mujer' },
     weatherLabel: { es: 'Brisa Nocturna y Reflectores', en: 'Night Breeze & Searchlights' },
     skyTop: '#040a1c',
     skyMid: '#0b1d42',
@@ -45,18 +48,18 @@ export const CITIES = [
   {
     index: 1,
     flag: '🇧🇷',
-    name: { es: 'São Paulo', en: 'São Paulo' },
-    monumentName: { es: 'Ponte Octávio Frias de Oliveira', en: 'Octávio Frias Cable Bridge' },
-    weatherLabel: { es: 'Brasa Nocturna Paulista', en: 'Paulista Warm Night Haze' },
+    name: { es: 'Río de Janeiro', en: 'Rio de Janeiro' },
+    monumentName: { es: 'Cristo Redentor Iluminado', en: 'Illuminated Christ the Redeemer' },
+    weatherLabel: { es: 'Brasa Nocturna Carioca', en: 'Carioca Warm Night Haze' },
     skyTop: '#12091c',
     skyMid: '#261438',
     skyBot: '#422040',
     winColor: '#fde047',
-    accentColor: '#f59e0b',
+    accentColor: '#4ade80',
     weather: 'haze',
     weatherArchetype: 'golden_embers',
     windStrength: 0.49,
-    monument: 'sealink',
+    monument: 'cristo',
   },
   {
     index: 2,
@@ -78,17 +81,17 @@ export const CITIES = [
     index: 3,
     flag: '🇺🇸',
     name: { es: 'Nueva York', en: 'New York' },
-    monumentName: { es: 'Aguja del Empire State', en: 'Empire State Spire' },
+    monumentName: { es: 'Estatua de la Libertad y Empire State', en: 'Statue of Liberty & Empire State' },
     weatherLabel: { es: 'Reflectores de Manhattan', en: 'Manhattan Sky Searchlights' },
     skyTop: '#040814',
     skyMid: '#0f1b38',
     skyBot: '#1e325c',
     winColor: '#e0f2fe',
-    accentColor: '#60a5fa',
+    accentColor: '#38bdf8',
     weather: 'steam',
     weatherArchetype: 'urban',
     windStrength: 0.63,
-    monument: 'empire',
+    monument: 'liberty_empire',
   },
   {
     index: 4,
@@ -104,7 +107,7 @@ export const CITIES = [
     weather: 'gusts',
     weatherArchetype: 'urban',
     windStrength: 0.71,
-    monument: 'empire',
+    monument: 'willis',
   },
   {
     index: 5,
@@ -126,7 +129,7 @@ export const CITIES = [
     index: 6,
     flag: '🇬🇧',
     name: { es: 'Londres', en: 'London' },
-    monumentName: { es: 'Big Ben, London Eye y The Shard', en: 'Big Ben, London Eye & The Shard' },
+    monumentName: { es: 'Big Ben y London Eye Giratorio', en: 'Big Ben & Rotating London Eye' },
     weatherLabel: { es: 'Niebla Profunda del Támesis', en: 'Thames Nocturnal Mist' },
     skyTop: '#050a14',
     skyMid: '#0f1e36',
@@ -142,15 +145,15 @@ export const CITIES = [
     index: 7,
     flag: '🇫🇷',
     name: { es: 'París', en: 'Paris' },
-    monumentName: { es: 'Torre Eiffel Iluminada', en: 'Illuminated Eiffel Tower' },
-    weatherLabel: { es: 'Haces de Luz Nocturnos', en: 'Eiffel Nocturnal Beams' },
+    monumentName: { es: 'Torre Eiffel y Faro Giratorio', en: 'Eiffel Tower & Rotating Beacon' },
+    weatherLabel: { es: 'Haces de Luz Ámbar/Dorado', en: 'Amber/Gold Nocturnal Beams' },
     skyTop: '#06091c',
     skyMid: '#121d42',
     skyBot: '#1e3266',
     winColor: '#fde68a',
     accentColor: '#fbbf24',
     weather: 'gusts',
-    weatherArchetype: 'urban',
+    weatherArchetype: 'golden_embers',
     windStrength: 0.92,
     monument: 'eiffel',
   },
@@ -168,23 +171,23 @@ export const CITIES = [
     weather: 'snow',
     weatherArchetype: 'blizzard',
     windStrength: 0.99,
-    monument: 'obelisco',
+    monument: 'cuatrotorres',
   },
   {
     index: 9,
-    flag: '🇩🇪',
-    name: { es: 'Berlín', en: 'Berlin' },
-    monumentName: { es: 'Torre de TV en Alexanderplatz', en: 'Fernsehturm Alexanderplatz' },
-    weatherLabel: { es: 'Ventisca invernal Europea', en: 'European Winter Blizzard' },
+    flag: '🇷🇺',
+    name: { es: 'Moscú', en: 'Moscow' },
+    monumentName: { es: 'Cúpulas de San Basilio con Estrellas', en: "Saint Basil's Onion Domes" },
+    weatherLabel: { es: 'Ventisca Invernal Rusa', en: 'Russian Winter Blizzard' },
     skyTop: '#06101c',
     skyMid: '#122640',
     skyBot: '#1e3e64',
     winColor: '#a5f3fc',
-    accentColor: '#22d3ee',
+    accentColor: '#f43f5e',
     weather: 'snow',
     weatherArchetype: 'blizzard',
     windStrength: 1.06,
-    monument: 'cntower',
+    monument: 'stbasil',
   },
   {
     index: 10,
@@ -206,13 +209,13 @@ export const CITIES = [
     index: 11,
     flag: '🇪🇬',
     name: { es: 'El Cairo', en: 'Cairo' },
-    monumentName: { es: 'Pirámides de Giza', en: 'Pyramids of Giza' },
+    monumentName: { es: 'Las Tres Grandes Pirámides de Giza', en: 'Three Great Pyramids of Giza' },
     weatherLabel: { es: 'Tormenta de Polvo Dorado', en: 'Golden Desert Dust Storm' },
     skyTop: '#1a0d04',
     skyMid: '#422009',
     skyBot: '#6b3610',
     winColor: '#fed7aa',
-    accentColor: '#f97316',
+    accentColor: '#fde047',
     weather: 'sand',
     weatherArchetype: 'golden_embers',
     windStrength: 1.2,
@@ -228,7 +231,7 @@ export const CITIES = [
     skyMid: '#361f09',
     skyBot: '#593310',
     winColor: '#fde047',
-    accentColor: '#f59e0b',
+    accentColor: '#00f2fe',
     weather: 'lasers',
     weatherArchetype: 'golden_embers',
     windStrength: 1.28,
@@ -264,7 +267,7 @@ export const CITIES = [
     weather: 'lightning',
     weatherArchetype: 'cyber_rain',
     windStrength: 1.42,
-    monument: 'empire',
+    monument: 'mahanakhon',
   },
   {
     index: 15,
@@ -318,7 +321,7 @@ export const CITIES = [
     index: 18,
     flag: '🇦🇺',
     name: { es: 'Sídney', en: 'Sydney' },
-    monumentName: { es: 'Ópera de Sídney y Harbour Bridge', en: 'Sydney Opera House & Harbour Bridge' },
+    monumentName: { es: 'Velas de la Ópera de Sídney', en: 'Sydney Opera House Sails' },
     weatherLabel: { es: 'Ventisca Austral Oceánica', en: 'Southern Ocean Gale Blizzard' },
     skyTop: '#040e21',
     skyMid: '#0b264f',
@@ -334,13 +337,13 @@ export const CITIES = [
     index: 19,
     flag: '🇯🇵',
     name: { es: 'Tokio', en: 'Tokyo' },
-    monumentName: { es: 'Shinjuku Neón y Torre de Tokio', en: 'Shinjuku Neon & Tokyo Tower' },
+    monumentName: { es: 'Torre de Tokio y Arco Torii Luminoso', en: 'Tokyo Tower & Luminous Torii Gate' },
     weatherLabel: { es: 'Tormenta Cyberpunk Final', en: 'Ultimate Cyberpunk Neon Storm' },
     skyTop: '#090420',
     skyMid: '#1b0b45',
     skyBot: '#32146e',
     winColor: '#fda4af',
-    accentColor: '#00f2fe',
+    accentColor: '#ef4444',
     weather: 'lightning',
     weatherArchetype: 'cyber_rain',
     windStrength: 1.85,
@@ -348,114 +351,483 @@ export const CITIES = [
   },
 ];
 
+// ============================================================================
+// BLOQUE 4: CIUDADES EXCLUSIVAS VIP (PARA JUGADORES CON PASE VIP / COMPRA PRO)
+// ============================================================================
+export const VIP_CITIES = [
+  {
+    id: 'vip_dubai',
+    index: 20,
+    flag: '🇦🇪',
+    name: { es: 'Dubái Sky-Bridge VIP', en: 'Dubai Sky-Bridge VIP' },
+    desc: {
+      es: 'Cruce entre las torres más altas del mundo con tormenta de oro y pago x3.',
+      en: 'Crossing between the tallest towers in the world with golden storm & x3 payout.',
+    },
+    weatherLabel: { es: 'Tormenta de Oro 24K VIP', en: '24K Gold Storm VIP' },
+    weatherArchetype: 'golden_embers',
+    accentColor: '#fde047',
+    winColor: '#fef08a',
+    windStrength: 1.25,
+    monument: 'burjkhalifa',
+    rewardMult: 3,
+    gemBonus: 25,
+    gemUnlockCost: 350,
+    usdPrice: '$1.99 USD',
+  },
+  {
+    id: 'vip_vegas',
+    index: 21,
+    flag: '🇺🇸',
+    name: { es: 'Las Vegas Neon Strip VIP', en: 'Las Vegas Neon Strip VIP' },
+    desc: {
+      es: 'Luces de casino hiper-brillantes y recompensas triples x3 LP y Gemas.',
+      en: 'Hyper-bright casino lights and triple x3 LP & Gems rewards.',
+    },
+    weatherLabel: { es: 'Lluvia de Neón y Fichas VIP', en: 'Casino Neon Rain VIP' },
+    weatherArchetype: 'cyber_rain',
+    accentColor: '#f43f5e',
+    winColor: '#fde047',
+    windStrength: 1.32,
+    monument: 'vegas_strip',
+    rewardMult: 3,
+    gemBonus: 35,
+    gemUnlockCost: 400,
+    usdPrice: '$2.49 USD',
+  },
+  {
+    id: 'vip_monaco',
+    index: 22,
+    flag: '🇲🇨',
+    name: { es: 'Mónaco Casino Royal VIP', en: 'Monaco Casino Royal VIP' },
+    desc: {
+      es: 'Noche de gala sobre la bahía de Montecarlo con pago triple de monedas.',
+      en: 'Gala night over Monte Carlo bay with triple coin payouts.',
+    },
+    weatherLabel: { es: 'Destellos Dorados de Gala', en: 'Royal Golden Sparkles' },
+    weatherArchetype: 'golden_embers',
+    accentColor: '#fbbf24',
+    winColor: '#fef9c3',
+    windStrength: 1.18,
+    monument: 'monaco_casino',
+    rewardMult: 3,
+    gemBonus: 30,
+    gemUnlockCost: 400,
+    usdPrice: '$2.49 USD',
+  },
+  {
+    id: 'vip_alps',
+    index: 23,
+    flag: '🇨🇭',
+    name: { es: 'Alpes Suizos Nocturnos VIP', en: 'Swiss Alps Nocturnal VIP' },
+    desc: {
+      es: 'Cruce extremo entre teleféricos de alta montaña bajo aurora boreal.',
+      en: 'Extreme crossing between high-mountain cable cars under the Aurora Borealis.',
+    },
+    weatherLabel: { es: 'Aurora Boreal y Ventisca Alpina', en: 'Aurora Borealis & Alpine Gale' },
+    weatherArchetype: 'blizzard',
+    accentColor: '#4ade80',
+    winColor: '#a5f3fc',
+    windStrength: 1.45,
+    monument: 'swiss_alps',
+    rewardMult: 3.5,
+    gemBonus: 45,
+    gemUnlockCost: 450,
+    usdPrice: '$2.99 USD',
+  },
+];
+
+// ============================================================================
+// BLOQUE 2: NUEVA CATEGORÍA "VARAS DE EQUILIBRIO (BARRAS)" (MONEDAS Y PAGA)
+// ============================================================================
+export const BALANCE_POLES = [
+  {
+    id: 'pole_basic',
+    icon: '🦯',
+    name: { es: 'Barra de Acero Urbano', en: 'Urban Steel Pole' },
+    badge: { es: 'GRATIS • BASE 1.0x', en: 'FREE • BASE 1.0x' },
+    desc: {
+      es: 'Estabilidad base 1.0x con núcleo láser cian estándar.',
+      en: 'Base 1.0x stability with standard cyan laser core.',
+    },
+    currency: 'free',
+    cost: 0,
+    gemCost: 0,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    gravityReduction: 0,
+    stepDamp: 0,
+    catchRadiusBonus: 0,
+    scoreMult: 1.0,
+    coinMult: 1.0,
+    noCatchRecoil: false,
+    autoSaveFall: false,
+    poleScaleX: 1.0,
+    coreHex: 0xe0f2fe,
+    glowHex: 0x00f2fe,
+    tipHex: 0x00f2fe,
+    hasGyroRings: false,
+  },
+  {
+    id: 'pole_carbon',
+    icon: '⚡',
+    name: { es: 'Barra de Fibra de Carbono', en: 'Carbon Fiber Pole' },
+    badge: { es: '-18% GRAVEDAD • +LARGO 3D', en: '-18% GRAVITY • +3D LENGTH' },
+    desc: {
+      es: 'Reduce la gravedad de inclinación un 18% y aumenta el largo visual de la barra en 3D.',
+      en: 'Reduces tipping gravity by 18% and extends the 3D pole length.',
+    },
+    currency: 'coins',
+    cost: 14500,
+    gemCost: 140,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    gravityReduction: 0.18,
+    stepDamp: 0.1,
+    catchRadiusBonus: 0.05,
+    scoreMult: 1.1,
+    coinMult: 1.1,
+    noCatchRecoil: false,
+    autoSaveFall: false,
+    poleScaleX: 1.22,
+    coreHex: 0xdcfce7,
+    glowHex: 0x22d3ee,
+    tipHex: 0x4ade80,
+    hasGyroRings: false,
+  },
+  {
+    id: 'pole_gyro',
+    icon: '🌀',
+    name: { es: 'Barra Giroscópica Neón', en: 'Neon Gyroscopic Pole' },
+    badge: { es: '-32% INCLINACIÓN • -30% PISADA', en: '-32% TILT • -30% STEP SWAY' },
+    desc: {
+      es: 'Reduce la inclinación un 32% y amortigua el impacto lateral de las pisadas rápidas un 30%.',
+      en: 'Reduces tilt by 32% and dampens fast-step lateral impact by 30%.',
+    },
+    currency: 'coins',
+    cost: 48000,
+    gemCost: 290,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    gravityReduction: 0.32,
+    stepDamp: 0.3,
+    catchRadiusBonus: 0.1,
+    scoreMult: 1.25,
+    coinMult: 1.25,
+    noCatchRecoil: false,
+    autoSaveFall: false,
+    poleScaleX: 1.34,
+    coreHex: 0xf3e8ff,
+    glowHex: 0xa855f7,
+    tipHex: 0x00f2fe,
+    hasGyroRings: true,
+  },
+  {
+    id: 'pole_quantum',
+    icon: '👑',
+    name: { es: '👑 Barra Láser Cuántica', en: '👑 Quantum Laser Pole' },
+    badge: {
+      es: 'EXCLUSIVA PAGA • -50% GRAVEDAD • +25% ARO • x1.5 PTS',
+      en: 'PRO EXCLUSIVE • -50% GRAVITY • +25% RING • x1.5 PTS',
+    },
+    desc: {
+      es: 'Reduce la inclinación un 50%, agranda el aro de captura de malabares un 25% y otorga Multiplicador de Puntos x1.5.',
+      en: 'Reduces tilt by 50%, enlarges juggle catch rings by 25% and grants x1.5 Score Multiplier.',
+    },
+    currency: 'gems_or_usd',
+    cost: 450,
+    gemCost: 450,
+    usdPrice: '$1.99 USD',
+    isPro: true,
+    isVipOnly: false,
+    gravityReduction: 0.5,
+    stepDamp: 0.4,
+    catchRadiusBonus: 0.25,
+    scoreMult: 1.5,
+    coinMult: 1.5,
+    noCatchRecoil: false,
+    autoSaveFall: false,
+    poleScaleX: 1.45,
+    coreHex: 0xffe4e6,
+    glowHex: 0xf43f5e,
+    tipHex: 0x00f2fe,
+    hasGyroRings: true,
+  },
+  {
+    id: 'pole_imperial',
+    icon: '👑',
+    name: { es: '👑 Barra Gravitatoria Imperial', en: '👑 Imperial Graviton Pole' },
+    badge: {
+      es: 'PASE VIP • +65% ESTABILIDAD • CERO RETROCESO • AUTO-SALVADA • x2.0',
+      en: 'VIP PASS • +65% STABILITY • ZERO RECOIL • AUTO-SAVE • x2.0',
+    },
+    desc: {
+      es: 'Estabilidad máxima (+65%), anula el retroceso al atrapar esferas, salva automáticamente de la 1ra caída por nivel y otorga Multiplicador x2.0.',
+      en: 'Max stability (+65%), zero catch recoil, auto-saves first fall per level and grants x2.0 Multiplier.',
+    },
+    currency: 'vip_or_usd',
+    cost: 900,
+    gemCost: 900,
+    usdPrice: '$3.99 USD',
+    isPro: true,
+    isVipOnly: true,
+    gravityReduction: 0.65,
+    stepDamp: 0.55,
+    catchRadiusBonus: 0.3,
+    scoreMult: 2.0,
+    coinMult: 2.0,
+    noCatchRecoil: true,
+    autoSaveFall: true,
+    poleScaleX: 1.56,
+    coreHex: 0xfef9c3,
+    glowHex: 0xfde047,
+    tipHex: 0xf59e0b,
+    hasGyroRings: true,
+  },
+];
+
+// ============================================================================
+// BLOQUE 3.1: ASPECTOS (SKINS) CON BENEFICIOS ACTIVOS EN PARTIDA
+// ============================================================================
 export const SKINS = [
   {
     id: 'skin_1',
     icon: '🧥',
     unlockLevel: 1,
     unlockCity: 1,
+    currency: 'coins',
+    cost: 0,
     gemCost: 0,
-    name: { es: 'Urbano Callejero', en: 'Street Urban' },
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    bonusMult: 1.0,
+    catchWindowBonus: 0,
+    coinBonus: 0,
+    windReduction: 0,
+    stepDampBonus: 0,
+    freeShields: 0,
+    badge: { es: 'GRATIS • SIN BONUS', en: 'FREE • NO BONUS' },
+    name: { es: 'Equilibrista Urbano', en: 'Urban Tightrope Walker' },
     desc: {
-      es: 'Buzo con capucha gris grafito oscuro que flamea con el viento, pantalón cargo negro y botas urbanas.',
-      en: 'Dark graphite hoodie fluttering in the wind, black cargo pants and urban boots.',
+      es: 'Silueta acrobática urbana estándar con acabado negro mate y recorte de luz cian.',
+      en: 'Standard urban acrobatic silhouette with matte black finish and cyan rim light.',
     },
     hoodieColor: '#334155',
     pantsColor: '#0f172a',
-    trimColor: '#94a3b8',
+    trimColor: '#00f2fe',
     shoeColor: '#e2e8f0',
+    rimHex: 0x00f2fe,
     glowColor: null,
     goldTrail: false,
   },
   {
     id: 'skin_2',
     icon: '🏃',
-    unlockLevel: 11,
-    unlockCity: 3,
-    gemCost: 150,
-    name: { es: 'Night Runner', en: 'Night Runner' },
+    unlockLevel: 5,
+    unlockCity: 2,
+    currency: 'coins',
+    cost: 25000,
+    gemCost: 180,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    bonusMult: 1.25,
+    catchWindowBonus: 0.15,
+    coinBonus: 0.25,
+    windReduction: 0,
+    stepDampBonus: 0.1,
+    freeShields: 0,
+    badge: {
+      es: '+15% VENTANA CAPTURA • +25% MONEDAS',
+      en: '+15% CATCH WINDOW • +25% COINS',
+    },
+    name: { es: 'Corredor Sombra Vector', en: 'Vector Shadow Runner' },
     desc: {
-      es: 'Rompevientos negro con tiras reflectivas blancas y calzado aerodinámico de alta visibilidad.',
-      en: 'Black windbreaker with white reflective strips and high-visibility aerodynamic footwear.',
+      es: 'Otorga +15% ventana de captura de malabares y +25% monedas ganadas por nivel.',
+      en: 'Grants +15% juggle catch window and +25% coins earned per level.',
     },
     hoodieColor: '#111827',
     pantsColor: '#090d16',
-    trimColor: '#f8fafc',
+    trimColor: '#38bdf8',
     shoeColor: '#38bdf8',
-    glowColor: '#e2e8f0',
+    rimHex: 0x38bdf8,
+    glowColor: '#38bdf8',
     goldTrail: false,
   },
   {
     id: 'skin_3',
     icon: '⚡',
-    unlockLevel: 21,
-    unlockCity: 5,
-    gemCost: 300,
-    name: { es: 'Infiltrado Táctico', en: 'Tactical Infiltrator' },
+    unlockLevel: 12,
+    unlockCity: 4,
+    currency: 'coins',
+    cost: 65000,
+    gemCost: 340,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    bonusMult: 1.3,
+    catchWindowBonus: 0.1,
+    coinBonus: 0.3,
+    windReduction: 0.3,
+    stepDampBonus: 0.15,
+    freeShields: 0,
+    badge: {
+      es: '-30% EMPUJE VIENTO • MULTIPLICADOR x1.3',
+      en: '-30% WIND PUSH • x1.3 MULTIPLIER',
+    },
+    name: { es: 'Fantasma Cibernético', en: 'Cybernetic Phantom' },
     desc: {
-      es: 'Campera técnica entallada negro mate con arnés y líneas de neón cian en talones y muñecas.',
-      en: 'Matte black fitted tactical jacket with harness and cyan neon lines on heels and wrists.',
+      es: 'Reduce un 30% el empuje lateral del viento y activa un Multiplicador x1.3.',
+      en: 'Reduces lateral wind push by 30% and activates a x1.3 Multiplier.',
     },
     hoodieColor: '#0f172a',
     pantsColor: '#060a12',
-    trimColor: '#22d3ee',
+    trimColor: '#a855f7',
     shoeColor: '#06b6d4',
-    glowColor: '#22d3ee',
-    goldTrail: false,
-  },
-  {
-    id: 'skin_4',
-    icon: '🎩',
-    unlockLevel: 36,
-    unlockCity: 8,
-    gemCost: 500,
-    name: { es: 'Ilusionista de Altura', en: 'High-Wire Illusionist' },
-    desc: {
-      es: 'Chaleco sastrero oscuro con detalles púrpura/plata, cinta reactiva al viento y guantes de precisión.',
-      en: 'Dark tailored vest with purple/silver accents, wind-reactive headband and precision gloves.',
-    },
-    hoodieColor: '#1e1b2e',
-    pantsColor: '#0d0b14',
-    trimColor: '#c084fc',
-    shoeColor: '#e2e8f0',
+    rimHex: 0xa855f7,
     glowColor: '#a855f7',
     goldTrail: false,
   },
   {
-    id: 'skin_5',
+    id: 'skin_4',
     icon: '🥷',
-    unlockLevel: 61,
-    unlockCity: 13,
-    gemCost: 800,
-    name: { es: 'Cyber-Shinobi Tokio', en: 'Tokyo Cyber-Shinobi' },
+    unlockLevel: 20,
+    unlockCity: 6,
+    currency: 'gems_or_usd',
+    cost: 500,
+    gemCost: 500,
+    usdPrice: '$2.49 USD',
+    isPro: true,
+    isVipOnly: false,
+    bonusMult: 1.8,
+    catchWindowBonus: 0.18,
+    coinBonus: 0.8,
+    windReduction: 0.5,
+    stepDampBonus: 0.35,
+    freeShields: 0,
+    badge: {
+      es: '👑 PAGA • -50% VIENTO • PASO ESTABLE • MULTI x1.8',
+      en: '👑 PRO • -50% WIND • ULTRA STABLE • x1.8 MULTI',
+    },
+    name: { es: '👑 Samurái Neón', en: '👑 Neon Samurai' },
     desc: {
-      es: 'Traje técnico oscuro con circuito carmesí luminoso en espalda y botas magnéticas.',
-      en: 'Dark technical shinobi suit with glowing crimson spine circuit and magnetic boots.',
+      es: '-50% empuje del viento, paso ultra-estable en alta velocidad y Multiplicador x1.8 permanente.',
+      en: '-50% wind push, ultra-stable high-speed step and permanent x1.8 Multiplier.',
     },
     hoodieColor: '#14111a',
     pantsColor: '#09070d',
     trimColor: '#f43f5e',
     shoeColor: '#fb7185',
+    rimHex: 0xf43f5e,
     glowColor: '#f43f5e',
     goldTrail: false,
   },
   {
-    id: 'skin_6',
+    id: 'skin_5',
     icon: '👑',
-    unlockLevel: 81,
-    unlockCity: 17,
-    gemCost: 1200,
-    name: { es: 'Leyenda Black & Gold', en: 'Black & Gold Legend' },
+    unlockLevel: 35,
+    unlockCity: 10,
+    currency: 'vip_or_usd',
+    cost: 1100,
+    gemCost: 1100,
+    usdPrice: '$4.99 USD',
+    isPro: true,
+    isVipOnly: true,
+    bonusMult: 2.5,
+    catchWindowBonus: 0.25,
+    coinBonus: 1.5,
+    windReduction: 0.55,
+    stepDampBonus: 0.45,
+    freeShields: 1,
+    badge: {
+      es: '👑 PASE VIP • MULTI x2.5 LP/🪙 • 1 ESCUDO ANTI-CAÍDA • ESTELA 3D',
+      en: '👑 VIP PASS • x2.5 LP/🪙 MULTI • 1 ANTI-FALL SHIELD • 3D GOLD TRAIL',
+    },
+    name: { es: '👑 Leyenda Dorada Inmortal', en: '👑 Immortal Golden Legend' },
     desc: {
-      es: 'Traje aerodinámico de fibra de carbono negro profundo con bordes dorados y estela luminosa.',
-      en: 'Deep black carbon-fiber aerodynamic suit with bright golden edges and luminous arm trail.',
+      es: 'Multiplicador x2.5 permanente en LP y Monedas, arranca cada nivel con 1 Escudo Anti-Caída gratuito y viste al acróbata con estela dorada 3D.',
+      en: 'Permanent x2.5 LP & Coin Multiplier, starts every level with 1 free Anti-Fall Shield and 3D golden silhouette trail.',
     },
     hoodieColor: '#09090b',
     pantsColor: '#050507',
     trimColor: '#fde047',
     shoeColor: '#f59e0b',
+    rimHex: 0xfde047,
     glowColor: '#fde047',
     goldTrail: true,
+  },
+];
+
+// ============================================================================
+// BLOQUE 3.2: SECCIÓN "🚀 MULTIPLICADORES PERMANENTES"
+// ============================================================================
+export const PERMANENT_MULTIPLIERS = [
+  {
+    id: 'mult_x2_coins',
+    icon: '🪙',
+    name: {
+      es: 'Multiplicador x2 de Monedas',
+      en: 'x2 Permanent Coin Multiplier',
+    },
+    badge: { es: 'MONEDAS DEL JUEGO • x2 🪙', en: 'IN-GAME COINS • x2 🪙' },
+    desc: {
+      es: 'Duplica permanentemente todas las monedas ganadas en malabares y al cruzar azoteas.',
+      en: 'Permanently doubles all coins earned from juggling and clearing rooftops.',
+    },
+    currency: 'coins',
+    cost: 38000,
+    gemCost: 260,
+    usdPrice: null,
+    isPro: false,
+    isVipOnly: false,
+    coinMult: 2,
+    lpMult: 1,
+  },
+  {
+    id: 'mult_x3_pro',
+    icon: '👑',
+    name: {
+      es: '👑 Multiplicador x3 Pro de LP y Monedas',
+      en: '👑 x3 Pro LP & Coin Multiplier',
+    },
+    badge: { es: 'EXCLUSIVO PAGA / PASE VIP • x3 LP Y 🪙', en: 'PRO / VIP PASS • x3 LP & 🪙' },
+    desc: {
+      es: 'Triplica permanentemente tus Puntos de Liga (LP) para dominar el Ranking Online y tus Monedas.',
+      en: 'Permanently triples your League Points (LP) for the Online Leaderboard and your Coins.',
+    },
+    currency: 'vip_or_usd',
+    cost: 600,
+    gemCost: 600,
+    usdPrice: '$2.99 USD',
+    isPro: true,
+    isVipOnly: true,
+    coinMult: 3,
+    lpMult: 3,
+  },
+  {
+    id: 'mult_x5_ultra',
+    icon: '🚀',
+    name: {
+      es: '👑 Multiplicador x5 Ultra de LP y Monedas',
+      en: '👑 x5 Ultra LP & Coin Multiplier',
+    },
+    badge: { es: 'EXCLUSIVO PACK PRO • x5 LP Y 🪙', en: 'PRO PACK EXCLUSIVE • x5 LP & 🪙' },
+    desc: {
+      es: 'Potencia máxima x5 en Puntos de Liga Online y Monedas en todas las ciudades y niveles.',
+      en: 'Maximum x5 boost to Online League Points and Coins across all cities and levels.',
+    },
+    currency: 'gems_or_usd',
+    cost: 1200,
+    gemCost: 1200,
+    usdPrice: '$5.99 USD',
+    isPro: true,
+    isVipOnly: false,
+    coinMult: 5,
+    lpMult: 5,
   },
 ];
 
@@ -465,100 +837,134 @@ export const JUGGLE_PROPS = [
     icon: '🎾',
     mult: 1,
     unlockLevel: 1,
+    currency: 'coins',
+    cost: 0,
     gemCost: 0,
-    name: { es: 'Esferas Cromadas', en: 'Chrome Spheres' },
-    color: '#a3e635',
+    name: { es: 'Esferas Incandescentes', en: 'Incandescent Orbs' },
+    color: '#fde047',
   },
   {
     id: 'torches',
     icon: '🔥',
-    mult: 3,
+    mult: 2,
     unlockLevel: 6,
-    gemCost: 120,
-    name: { es: 'Antorchas de Fuego', en: 'Fire Torches' },
+    currency: 'coins',
+    cost: 18500,
+    gemCost: 160,
+    name: { es: 'Antorchas de Plasma (x2)', en: 'Plasma Torches (x2)' },
     color: '#f97316',
   },
   {
     id: 'knives',
     icon: '🔪',
-    mult: 6,
+    mult: 3,
     unlockLevel: 16,
-    gemCost: 260,
-    name: { es: 'Cuchillos Tácticos', en: 'Tactical Knives' },
-    color: '#cbd5e1',
+    currency: 'coins',
+    cost: 42000,
+    gemCost: 280,
+    name: { es: 'Dagas Láser Cian (x3)', en: 'Cyan Laser Daggers (x3)' },
+    color: '#00f2fe',
   },
   {
     id: 'chainsaws',
     icon: '🪚',
-    mult: 12,
+    mult: 5,
     unlockLevel: 31,
+    currency: 'gems',
+    cost: 480,
     gemCost: 480,
-    name: { es: 'Motosierras', en: 'Chainsaws' },
+    name: { es: '👑 Sierras Neón Pro (x5)', en: '👑 Pro Neon Saws (x5)' },
     color: '#ef4444',
-  },
-  {
-    id: 'dynamite',
-    icon: '🧨',
-    mult: 25,
-    unlockLevel: 56,
-    gemCost: 750,
-    name: { es: 'Dinamita Activa', en: 'Active Dynamite' },
-    color: '#dc2626',
   },
   {
     id: 'goldbars',
     icon: '🪙',
-    mult: 50,
-    unlockLevel: 81,
-    gemCost: 1100,
-    name: { es: 'Lingotes 24K', en: '24K Gold Bars' },
+    mult: 8,
+    unlockLevel: 60,
+    currency: 'gems',
+    cost: 950,
+    gemCost: 950,
+    name: { es: '👑 Orbes Cuánticos 24K (x8)', en: '👑 24K Quantum Orbs (x8)' },
     color: '#fde047',
   },
 ];
 
+// ============================================================================
+// BLOQUE 1: RE-ESCALADO EXPONENCIAL DE LA ARMERÍA + CORTE DE MONEDA EN NIVEL 5
+// ============================================================================
 export const GEAR_ITEMS = [
   {
     id: 'pole',
     icon: '⚖️',
     maxLevel: 10,
-    baseCost: 140,
-    costScale: 1.42,
     statLabel: { es: '-4.8% Gravedad / Nv', en: '-4.8% Gravity / Lvl' },
-    name: { es: 'Vara de Inercia', en: 'Inertia Balance Pole' },
+    name: { es: 'Núcleo de Inercia', en: 'Inertia Core' },
     desc: {
-      es: 'Aumenta el momento de inercia rotacional, desacelerando la caída gravitatoria lateral.',
-      en: 'Increases rotational moment of inertia, slowing down lateral gravitational tipping.',
+      es: 'Niveles 1-5 con Monedas (850 -> 30.600). Niveles 6-10 Élite Pro (Gemas / Pase VIP).',
+      en: 'Levels 1-5 with Coins (850 -> 30,600). Levels 6-10 Pro Elite (Gems / VIP Pass).',
     },
   },
   {
     id: 'boots',
     icon: '🥾',
     maxLevel: 10,
-    baseCost: 160,
-    costScale: 1.45,
     statLabel: { es: '-5.2% Viento / Nv', en: '-5.2% Wind / Lvl' },
     name: { es: 'Calzado Magnético', en: 'Magnetic Footwear' },
     desc: {
-      es: 'Incrementa la adherencia al cable de acero, reduce el empuje del viento y acelera el paso.',
-      en: 'Increases grip on the steel cable, dampens wind gusts and speeds up walking pace.',
+      es: 'Niveles 1-5 con Monedas (850 -> 30.600). Niveles 6-10 Élite Pro (Gemas / Pase VIP).',
+      en: 'Levels 1-5 with Coins (850 -> 30,600). Levels 6-10 Pro Elite (Gems / VIP Pass).',
     },
   },
   {
     id: 'gloves',
     icon: '🧤',
     maxLevel: 10,
-    baseCost: 150,
-    costScale: 1.42,
     statLabel: { es: '+1.5% Ventana / Nv', en: '+1.5% Catch Window / Lvl' },
     name: { es: 'Guantes Rítmicos', en: 'Rhythmic Gloves' },
     desc: {
-      es: 'Amplía la ventana dorada de captura (catchThreshold) y amortigua el sacudón por fallo.',
-      en: 'Widens the golden capture window (catchThreshold) and dampens balance jolts on a miss.',
+      es: 'Niveles 1-5 con Monedas (850 -> 30.600). Niveles 6-10 Élite Pro (Gemas / Pase VIP).',
+      en: 'Levels 1-5 with Coins (850 -> 30,600). Levels 6-10 Pro Elite (Gems / VIP Pass).',
     },
   },
 ];
 
 export const ARMORY_ITEMS = GEAR_ITEMS;
+
+/**
+ * BLOQUE 1: Curva Exponencial Estricta de la Armería
+ * - Niveles 1 a 5 (`nivelActual` 0 a 4): `Math.round(850 * Math.pow(2.45, nivelActual))`
+ *   (`850 -> 2083 -> 5102 -> 12500 -> 30626` monedas)
+ * - Niveles 6 a 10 (`nivelActual >= 5`): Tramo Élite / Dinero Real (`👑 MEJORA PRO — GEMAS / PASE VIP`),
+ *   ya NO acepta monedas comunes; exige Gemas Premium o tener activo el Pase VIP Pro.
+ */
+export function getArmoryUpgradeCost(currentLevel) {
+  const lvl = Math.max(0, Math.min(10, currentLevel || 0));
+  if (lvl >= 10) {
+    return {
+      isMax: true,
+      isProTier: true,
+      coinCost: 0,
+      gemCost: 0,
+    };
+  }
+  if (lvl < 5) {
+    const coinCost = Math.round(850 * Math.pow(2.45, lvl));
+    return {
+      isMax: false,
+      isProTier: false,
+      coinCost,
+      gemCost: 0,
+    };
+  }
+  const proStep = lvl - 5; // 0..4 for levels 6..10
+  const gemCost = Math.round(140 * Math.pow(1.45, proStep));
+  return {
+    isMax: false,
+    isProTier: true,
+    coinCost: 0,
+    gemCost,
+  };
+}
 
 export const SEASON_RIVALS = [
   { id: 'r1', name: 'Kaito_Skywalker', flag: '🇯🇵', country: '🇯🇵', baseLp: 14200, lp: 14200, badge: '👑' },
@@ -580,76 +986,72 @@ export const SEASON_REWARD_TIERS = [
 
 export const STORE_BUNDLES = [
   {
-    id: 'bundle_starter',
-    icon: '⚡',
-    coinCost: 1500,
-    gems: 80,
-    coins: 1200,
-    leaguePts: 150,
-    popular: false,
-    tag: '🎁 RECLAMAR',
-    name: { es: 'Cofre de Equilibrista', en: 'Tightrope Chest' },
+    id: 'bundle_vip_pass',
+    icon: '👑',
+    isVipPassBundle: true,
+    gems: 1500,
+    coins: 50000,
+    leaguePts: 1500,
+    popular: true,
+    tag: '👑 ACTIVAR VIP ($4.99)',
+    name: {
+      es: '👑 PASE VIP PRO TEMPORADA',
+      en: '👑 SEASON VIP PRO PASS',
+    },
     perks: {
-      es: ['+80 💎 Gemas al instante', '+150 🏆 Puntos de Liga', 'Recarga para Gancho Salvavidas'],
-      en: ['+80 💎 Instant Gems', '+150 🏆 League Points', 'Grapple Hook Save refill'],
+      es: [
+        '🔓 Desbloquea Mejoras Élite Nv. 6 a 10 en Armería',
+        '👑 Desbloquea las 4 Ciudades Exclusivas VIP',
+        '🦯 Incluye Barra Gravitatoria Imperial (x2.0 + Auto-Salvada)',
+        '🧥 Incluye Aspecto Leyenda Dorada Inmortal (x2.5 + Escudo)',
+        '+1.500 💎 Gemas y +50.000 🪙 Monedas al instante',
+      ],
+      en: [
+        '🔓 Unlocks Elite Armory Upgrades Lvl 6 to 10',
+        '👑 Unlocks all 4 Exclusive VIP Cities',
+        '🦯 Includes Imperial Graviton Pole (x2.0 + Auto-Save)',
+        '🧥 Includes Immortal Golden Legend Skin (x2.5 + Shield)',
+        '+1,500 💎 Gems & +50,000 🪙 Coins instantly',
+      ],
     },
   },
   {
-    id: 'bundle_pro',
-    icon: '🔥',
-    coinCost: 4500,
-    gems: 260,
-    coins: 4000,
-    leaguePts: 500,
-    popular: true,
-    tag: '⭐ POPULAR',
-    unlockProp: 'torches',
-    unlockSkin: 'skin_2',
-    badge: { es: 'RECOMENDADO', en: 'RECOMMENDED' },
-    name: { es: 'Cofre Maestro del Abismo', en: 'Abyss Master Chest' },
+    id: 'bundle_starter',
+    icon: '⚡',
+    gems: 450,
+    coins: 18000,
+    leaguePts: 300,
+    popular: false,
+    tag: '💎 PACK PRO ($1.99)',
+    name: { es: 'Cofre Cuántico de Gemas', en: 'Quantum Gem Chest' },
     perks: {
       es: [
-        '+260 💎 Gemas',
-        '🔥 Desbloquea Antorchas de Fuego (x3)',
-        '🏃 Desbloquea Aspecto "Night Runner"',
-        '+500 🏆 Puntos de Liga',
+        '+450 💎 Gemas Premium + 18.000 🪙 Monedas',
+        'Ideal para Barra Láser Cuántica o Mejoras Nv. 6+',
       ],
       en: [
-        '+260 💎 Gems',
-        '🔥 Unlocks Fire Torches (x3)',
-        '🏃 Unlocks "Night Runner" Skin',
-        '+500 🏆 League Points',
+        '+450 💎 Premium Gems + 18,000 🪙 Coins',
+        'Ideal for Quantum Laser Pole or Lvl 6+ Upgrades',
       ],
     },
   },
   {
     id: 'bundle_legend',
-    icon: '👑',
-    coinCost: 12000,
-    gems: 800,
-    coins: 12000,
-    leaguePts: 1500,
+    icon: '🚀',
+    gems: 1400,
+    coins: 85000,
+    leaguePts: 2500,
     popular: true,
-    tag: '👑 ÉLITE',
-    bootsBonus: 5,
-    unlockProp: 'chainsaws',
-    unlockSkin: 'skin_6',
-    badge: { es: 'ÉLITE DE TEMPORADA', en: 'SEASON ELITE' },
+    tag: '👑 PACK ULTRA ($5.99)',
     name: { es: 'Cofre Leyenda Black & Gold', en: 'Black & Gold Legend Chest' },
     perks: {
       es: [
-        '+800 💎 Gemas',
-        '🥾 Calzado Magnético +5 Niveles',
-        '🪚 Desbloquea Motosierras (x12)',
-        '👑 Desbloquea Aspecto "Leyenda Black & Gold"',
-        '+1,500 🏆 Puntos de Liga',
+        '+1.400 💎 Gemas + 85.000 🪙 Monedas',
+        'Alcanza para Multiplicador x5 Ultra + Samurái Neón',
       ],
       en: [
-        '+800 💎 Gems',
-        '🥾 Magnetic Footwear +5 Levels',
-        '🪚 Unlocks Chainsaws (x12)',
-        '👑 Unlocks "Black & Gold Legend" Skin',
-        '+1,500 🏆 League Points',
+        '+1,400 💎 Gems + 85,000 🪙 Coins',
+        'Enough for x5 Ultra Multiplier + Neon Samurai',
       ],
     },
   },
@@ -660,40 +1062,27 @@ export const I18N = {
     title: 'NO MIRES ABAJO',
     gameTitle: 'NO MIRES ABAJO',
     installApp: '📲 Instalar',
-    iosInstallHint:
-      'Para instalar en tu dispositivo: tocá el menú del navegador y seleccioná "Agregar a pantalla de inicio".',
     leagueBanner: 'LIGA DE TEMPORADA',
-    leagueBannerLabel: '🏆 LIGA DE TEMPORADA:',
     seasonEndsIn: 'Cierre en',
     leaguePointsShort: 'LP',
     multiplier: 'MULTIPLICADOR',
     gems: 'GEMAS',
     left: 'IZQ',
     right: 'DER',
-    leftBtn: 'IZQ',
-    rightBtn: 'DER',
-    holdBalanceTapJuggle: 'EQUILIBRIO / CAPTURA',
     grappleTitle: 'GANCHO SALVAVIDAS',
     grappleCost: 'SALVAR (20 💎)',
-    grappleHookTitle: 'GANCHO SALVAVIDAS',
-    grappleHookCost: 'SALVAR (20 💎)',
     addJuggle: '+ SUMAR MALABAR',
     citiesBtn: '20 Ciudades',
     armoryBtn: 'Armería',
-    shopBtn: 'Cofres',
+    shopBtn: 'Tienda VIP',
     pauseBtn: 'PAUSA',
     playNowBtn: '▶ JUGAR / SALTAR AL CABLE',
-    mapBtn: '🗺️ Mapa',
     skinsBtn: 'Aspectos',
-    gearBtn: '🎒 Armería',
-    storeBtn: '🛒 Cofres',
-    leagueBtn: '🏆 Liga',
     level: 'Nivel',
-    levelWord: 'Nivel',
-    cityWord: 'Ciudad',
     windLabel: 'VIENTO',
     windGustAlert: '⚠️ RÁFAGA DE VIENTO',
     nearMissPopup: '⚡ ¡SALVADA AL LÍMITE! +100',
+    shieldSavedPopup: '🛡️ ¡ESCUDO ANTI-CAÍDA ACTIVADO!',
     feverModeBadge: '🔥 MODO FRENESÍ x2',
     perfectCatchLabel: '¡PERFECTO!',
     goodCatchLabel: '¡BIEN!',
@@ -705,111 +1094,57 @@ export const I18N = {
     onboardingCountryLabel: 'PAÍS / BANDERA',
     onboardingSaveCta: 'GUARDAR Y ENTRAR AL JUEGO',
     editProfileTooltip: 'Editar nombre o bandera',
-    lossModalHeader:
-      '🚨 ¡PERDISTE EL EJE DE GRAVEDAD EN EL METRO {meter}m DE {city} (NIVEL {level})!',
-    lossModalSub: 'Cámara lenta activada ({seconds}s antes de caer al abismo)...',
-    grappleCta: '🪝 DISPARAR GANCHO SALVAVIDAS Y VOLVER AL CABLE (20 💎)',
-    rooftopCleared: '🏁 ¡AZOTEA ALCANZADA!',
     levelCleared: '¡AZOTEA ALCANZADA!',
-    bossChestTitle: '🎁 ¡COFRE DE JEFE DE CIUDAD DESBLOQUEADO!',
     nextLevel: 'SIGUIENTE NIVEL',
-    nextLevelBtn: '▶️ SIGUIENTE NIVEL',
-    worldMapTitle: '🗺️ CAMPAÑA MUNDIAL — 20 CIUDADES (100 NIVELES)',
-    skinsModalTitle: '🧥 TIENDA DE ASPECTOS URBANOS',
-    skinsModalNote:
-      'Equipá cualquier aspecto desbloqueado conservando el 100% de tus mejoras de Armería RPG.',
-    equipBtn: 'EQUIPAR',
-    equippedBadge: '✓ EQUIPADO',
-    unlockWithGems: 'Desbloquear ({cost} 💎)',
-    lockedAtLevel: 'Nivel {level} o {cost} 💎',
-    armoryTitle: 'ARMERÍA RPG DE PRECISIÓN',
-    armorySub: 'Mejorá tu equipamiento técnico para dominar las ráfagas y la gravedad',
+    armoryTitle: 'ARMERÍA PRO, BARRAS Y MULTIPLICADORES',
+    armorySub: 'Tramo 1-5 con Monedas • Tramo 6-10 Élite Pro con Gemas o Pase VIP',
     maxLevelLabel: 'NIVEL MÁXIMO (10/10)',
     upgradeBtn: 'MEJORAR',
-    gearModalTitle: '🎒 ARMERÍA RPG DE PRECISIÓN (NVL 1–10)',
-    upgradeCoins: 'Mejorar ({cost} 🪙)',
-    upgradeGems: 'Instantáneo (15 💎)',
-    maxLevelReached: 'NIVEL MÁXIMO (10/10)',
+    proUpgradeBtn: '👑 MEJORA PRO — GEMAS / PASE VIP',
+    polesSectionTitle: '⚖️ VARAS DE EQUILIBRIO (BARRAS)',
+    multipliersSectionTitle: '🚀 MULTIPLICADORES PERMANENTES',
+    vipCitiesTitle: '👑 CIUDADES EXCLUSIVAS VIP',
     leagueModalTitle: 'LIGA DE TEMPORADA — CLASIFICACIÓN MUNDIAL',
     leagueModalSub:
-      'Sumá Puntos de Liga (LP) superando niveles y encadenando capturas rítmicas perfectas para ganar Cofres Épicos de Gemas y Monedas.',
-    leagueModalDesc:
-      'Sumá Puntos de Liga (LP) superando niveles, encadenando capturas rítmicas perfectas y abriendo Cofres de Jefe de Ciudad.',
-    yourLeaguePoints: '🏆 Tus Puntos de Liga:',
-    claimRewardBtn: '🎁 Reclamar Cofre',
-    claimedBadge: '✓ Reclamado',
-    shopTitle: 'TIENDA DE COFRES DE TEMPORADA',
-    shopSub: 'Obtené Cofres de Gemas y Monedas para desbloquear Aspectos, Objetos y Ganchos Salvavidas.',
-    storeModalTitle: '🛒 TIENDA DE COFRES Y EQUIPAMIENTO',
-    storeModalSubtitle:
-      'Canjeá tus Monedas ganadas en el cable por Cofres de Temporada, Gemas y Objetos Especiales.',
-    exchangeCoinsBtn: 'Canjear por {cost} 🪙',
-    freeDailyGemsBtn: '🎁 Reclamar +25 💎 de Bonificación Diaria',
-    dailyClaimedMsg: '✅ ¡Bonificación acreditada!',
-    lobbySubtitle: '📍 Nivel {level}/100 — {flag} {city} ({meters}m)',
-    lobbyCitiesBtn: '🗺️ 20 Ciudades (1-100)',
-    lobbyGearSkinsBtn: '🎒 Armería y Skins',
-    lobbyLeagueBtn: '🏆 Liga de Temporada',
-    lobbyPlayCta: '▶️ JUGAR / SALTAR AL CABLE',
-    pauseBtnLabel: '⏸️ PAUSA',
+      'Sumá Puntos de Liga (LP) superando niveles y encadenando capturas rítmicas perfectas para ganar Cofres Épicos.',
+    shopTitle: '👑 TIENDA PRO & PASE VIP DE TEMPORADA',
+    shopSub: 'Activá el Pase VIP Pro o adquirí Gemas para desbloquear Barras Cuánticas, Ciudades VIP y Mejoras Nv. 6-10.',
     pauseTitle: 'PARTIDA EN PAUSA',
     pauseSub: 'Tomate un respiro sobre el cable antes de continuar hacia la meta.',
-    pauseModalTitle: '⏸️ PARTIDA EN PAUSA',
-    pauseProgressInfo: '📍 {flag} {city} • Nivel {level} ({meter}m / {target}m)',
     resumeBtn: 'REANUDAR PARTIDA',
     restartBtn: 'REINICIAR NIVEL',
-    resumeGameBtn: '▶️ REANUDAR PARTIDA',
-    restartLevelBtn: '🔄 REINICIAR NIVEL',
-    openGearSkinsFromPauseBtn: '🎒 ABRIR ARMERÍA / CAMBIAR ASPECTO',
     backToLobbyBtn: 'VOLVER AL MENÚ PRINCIPAL',
-    mainMenuShortBtn: '🏠 Menú Principal',
-    retryFromZeroBtn: '🔄 Reintentar desde 0m',
     fellTitle: '¡PERDISTE EL EQUILIBRIO!',
     fellSub: 'Estabas a pocos metros de alcanzar la azotea de enfrente',
     continueHook: 'USAR GANCHO SALVAVIDAS (20 💎)',
     retryFree: 'REINTENTAR DESDE 0m',
-    tabEquipment: '🎒 Armería RPG (1-10)',
-    tabSkins: '🧥 Aspectos (6 Skins)',
     youLabel: 'TÚ (Equilibrista)',
   },
   en: {
     title: "DON'T LOOK DOWN",
     gameTitle: "DON'T LOOK DOWN",
     installApp: '📲 Install',
-    iosInstallHint:
-      'To install on your device: tap the browser menu and select "Add to Home Screen".',
     leagueBanner: 'SEASON LEAGUE',
-    leagueBannerLabel: '🏆 SEASON LEAGUE:',
     seasonEndsIn: 'Ends in',
     leaguePointsShort: 'LP',
     multiplier: 'MULTIPLIER',
     gems: 'GEMS',
     left: 'LEFT',
     right: 'RIGHT',
-    leftBtn: 'LEFT',
-    rightBtn: 'RIGHT',
-    holdBalanceTapJuggle: 'BALANCE / CATCH',
     grappleTitle: 'GRAPPLE HOOK SAVE',
     grappleCost: 'SAVE (20 💎)',
-    grappleHookTitle: 'GRAPPLE HOOK',
-    grappleHookCost: 'SAVE (20 💎)',
     addJuggle: '+ ADD JUGGLE',
     citiesBtn: '20 Cities',
     armoryBtn: 'Armory',
-    shopBtn: 'Chests',
+    shopBtn: 'VIP Shop',
     pauseBtn: 'PAUSE',
     playNowBtn: '▶ PLAY / STEP ON THE WIRE',
-    mapBtn: '🗺️ Map',
     skinsBtn: 'Skins',
-    gearBtn: '🎒 Armory',
-    storeBtn: '🛒 Chests',
-    leagueBtn: '🏆 League',
     level: 'Level',
-    levelWord: 'Level',
-    cityWord: 'City',
     windLabel: 'WIND',
     windGustAlert: '⚠️ WIND GUST',
     nearMissPopup: '⚡ EDGE SAVE! +100',
+    shieldSavedPopup: '🛡️ ANTI-FALL SHIELD ACTIVATED!',
     feverModeBadge: '🔥 FEVER MODE x2',
     perfectCatchLabel: 'PERFECT!',
     goodCatchLabel: 'NICE!',
@@ -821,76 +1156,34 @@ export const I18N = {
     onboardingCountryLabel: 'COUNTRY / FLAG',
     onboardingSaveCta: 'SAVE & ENTER THE GAME',
     editProfileTooltip: 'Edit nickname or flag',
-    lossModalHeader:
-      '🚨 YOU LOST YOUR CENTER OF GRAVITY AT METER {meter}m OF {city} (LEVEL {level})!',
-    lossModalSub: 'Slow-motion activated ({seconds}s before falling into the abyss)...',
-    grappleCta: '🪝 FIRE GRAPPLE HOOK SAVE & RETURN TO WIRE (20 💎)',
-    rooftopCleared: '🏁 ROOFTOP REACHED!',
     levelCleared: 'ROOFTOP REACHED!',
-    bossChestTitle: '🎁 CITY BOSS CHEST UNLOCKED!',
     nextLevel: 'NEXT LEVEL',
-    nextLevelBtn: '▶️ NEXT LEVEL',
-    worldMapTitle: '🗺️ WORLD CAMPAIGN — 20 CITIES (100 LEVELS)',
-    skinsModalTitle: '🧥 URBAN SKIN SHOP',
-    skinsModalNote:
-      'Equip any unlocked skin while keeping 100% of your RPG Armory upgrades.',
-    equipBtn: 'EQUIP',
-    equippedBadge: '✓ EQUIPPED',
-    unlockWithGems: 'Unlock ({cost} 💎)',
-    lockedAtLevel: 'Level {level} or {cost} 💎',
-    armoryTitle: 'PRECISION RPG ARMORY',
-    armorySub: 'Upgrade your technical gear to master wind gusts and gravity',
+    armoryTitle: 'PRO ARMORY, POLES & MULTIPLIERS',
+    armorySub: 'Tier 1-5 with Coins • Tier 6-10 Pro Elite with Gems or VIP Pass',
     maxLevelLabel: 'MAX LEVEL (10/10)',
     upgradeBtn: 'UPGRADE',
-    gearModalTitle: '🎒 PRECISION RPG ARMORY (LVL 1–10)',
-    upgradeCoins: 'Upgrade ({cost} 🪙)',
-    upgradeGems: 'Instant (15 💎)',
-    maxLevelReached: 'MAX LEVEL (10/10)',
+    proUpgradeBtn: '👑 PRO UPGRADE — GEMS / VIP PASS',
+    polesSectionTitle: '⚖️ BALANCE POLES (BARS)',
+    multipliersSectionTitle: '🚀 PERMANENT MULTIPLIERS',
+    vipCitiesTitle: '👑 EXCLUSIVE VIP CITIES',
     leagueModalTitle: 'SEASON LEAGUE — GLOBAL LEADERBOARD',
     leagueModalSub:
-      'Earn League Points (LP) by clearing levels and chaining rhythmic catches to win Epic Gem & Coin Chests.',
-    leagueModalDesc:
-      'Earn League Points (LP) by clearing levels, chaining rhythmic catches and unlocking City Boss Chests.',
-    yourLeaguePoints: '🏆 Your League Points:',
-    claimRewardBtn: '🎁 Claim Chest',
-    claimedBadge: '✓ Claimed',
-    shopTitle: 'SEASON CHEST SHOP',
-    shopSub: 'Claim Gem & Coin Chests to unlock Skins, Juggling Props and Grapple Hook Saves.',
-    storeModalTitle: '🛒 CHEST & GEAR SHOP',
-    storeModalSubtitle:
-      'Exchange Coins earned on the wire for Season Chests, Gems and Special Props.',
-    exchangeCoinsBtn: 'Exchange for {cost} 🪙',
-    freeDailyGemsBtn: '🎁 Claim +25 💎 Daily Bonus',
-    dailyClaimedMsg: '✅ Bonus credited!',
-    lobbySubtitle: '📍 Level {level}/100 — {flag} {city} ({meters}m)',
-    lobbyCitiesBtn: '🗺️ 20 Cities (1-100)',
-    lobbyGearSkinsBtn: '🎒 Armory & Skins',
-    lobbyLeagueBtn: '🏆 Season League',
-    lobbyPlayCta: '▶️ PLAY / STEP ON THE WIRE',
-    pauseBtnLabel: '⏸️ PAUSE',
+      'Earn League Points (LP) by clearing levels and chaining rhythmic catches to win Epic Chests.',
+    shopTitle: '👑 PRO SHOP & SEASON VIP PASS',
+    shopSub: 'Activate the VIP Pro Pass or get Gems to unlock Quantum Poles, VIP Cities and Lvl 6-10 Upgrades.',
     pauseTitle: 'GAME PAUSED',
     pauseSub: 'Take a breath on the high wire before continuing to the target roof.',
-    pauseModalTitle: '⏸️ GAME PAUSED',
-    pauseProgressInfo: '📍 {flag} {city} • Level {level} ({meter}m / {target}m)',
     resumeBtn: 'RESUME GAME',
     restartBtn: 'RESTART LEVEL',
-    resumeGameBtn: '▶️ RESUME GAME',
-    restartLevelBtn: '🔄 RESTART LEVEL',
-    openGearSkinsFromPauseBtn: '🎒 OPEN ARMORY / CHANGE SKIN',
     backToLobbyBtn: 'BACK TO MAIN MENU',
-    mainMenuShortBtn: '🏠 Main Menu',
-    retryFromZeroBtn: '🔄 Retry from 0m',
     fellTitle: 'YOU LOST YOUR BALANCE!',
     fellSub: 'You were just meters away from reaching the opposite rooftop',
     continueHook: 'USE GRAPPLE HOOK SAVE (20 💎)',
     retryFree: 'RETRY FROM 0m',
-    tabEquipment: '🎒 RPG Armory (1-10)',
-    tabSkins: '🧥 Skins (6 Outfits)',
     youLabel: 'YOU (Tightrope Walker)',
   },
 };
 
-// Normalize CITIES, SKINS, and JUGGLE_PROPS fields for renderer & UI compatibility
 for (let i = 0; i < CITIES.length; i++) {
   const c = CITIES[i];
   c.id = c.id || `city_${c.index}`;
@@ -900,19 +1193,13 @@ for (let i = 0; i < CITIES.length; i++) {
   c.landmarkType = c.landmarkType || c.monument;
 }
 
-const SKIN_BONUS_MULTS = [1, 1.2, 1.5, 2, 3, 5];
 for (let i = 0; i < SKINS.length; i++) {
   const s = SKINS[i];
-  s.bonusMult = s.bonusMult || SKIN_BONUS_MULTS[i] || 1;
-  s.cost = s.cost ?? s.gemCost ?? 0;
-  s.currency = s.currency || 'gems';
   s.coatColor = s.coatColor || s.hoodieColor;
 }
 
 for (let i = 0; i < JUGGLE_PROPS.length; i++) {
   const p = JUGGLE_PROPS[i];
-  p.cost = p.cost ?? p.gemCost ?? 0;
-  p.currency = p.currency || 'gems';
   p.primaryColor = p.primaryColor || p.color;
   p.glowColor = p.glowColor || p.color;
 }
@@ -937,11 +1224,6 @@ export function getSeasonTimeRemaining() {
 
 /**
  * Curva de Velocidad de Caminata Progresiva en 5 Fases (Escalado fuerte desde Nivel 4)
- * - Niveles 1 a 3: 1.0x (velocidad base de aprendizaje)
- * - Niveles 4 a 10: escala de 1.25x a 1.45x
- * - Niveles 11 a 25: escala de 1.50x a 1.75x
- * - Niveles 26 a 50: escala de 1.80x a 2.10x
- * - Niveles 51 a 100: escala de 2.15x a 2.60x
  */
 export function getWalkSpeedMultiplier(level) {
   const safeLvl = Math.max(1, Math.min(100, level || 1));
@@ -973,10 +1255,10 @@ export function getCityForLevel(level) {
   return CITIES[idx];
 }
 
-export function getLevelConfig(level) {
+export function getLevelConfig(level, customVipCity = null) {
   const safeLvl = Math.max(1, Math.min(100, level || 1));
   const cityIndex = Math.min(19, Math.max(0, Math.floor((safeLvl - 1) / 5)));
-  const city = CITIES[cityIndex];
+  const city = customVipCity || CITIES[cityIndex];
   const stageInCity = ((safeLvl - 1) % 5) + 1;
 
   const walkSpeedMultiplier = getWalkSpeedMultiplier(safeLvl);
@@ -1001,33 +1283,51 @@ export function getLevelConfig(level) {
   const windBaseForce = 0.32 + city.windStrength * 0.45 + stageInCity * 0.045;
   const gravityInstability = 1.08 + (safeLvl / 100) * 0.92;
   const defaultObjects = safeLvl <= 15 ? 2 : safeLvl <= 55 ? 3 : 4;
+  const speedPhase =
+    safeLvl <= 3 ? 0 : safeLvl <= 10 ? 1 : safeLvl <= 25 ? 2 : safeLvl <= 50 ? 3 : 4;
+  const stepSwayImpulse = Number(
+    (0.028 + Math.max(0, walkSpeedMultiplier - 1) * 0.068).toFixed(4)
+  );
+  const catchRecoilImpulse = Number(
+    (0.036 + Math.max(0, walkSpeedMultiplier - 1) * 0.064).toFixed(4)
+  );
 
   return {
     level: safeLvl,
-    cityIndex,
+    cityIndex: customVipCity ? customVipCity.index : cityIndex,
     city,
+    isVipCity: Boolean(customVipCity),
     stageInCity,
+    speedPhase,
     walkSpeedMultiplier,
     baseWalkSpeed,
-    walkSpeed,
+    walkSpeed: walkSpeedMultiplier,
+    walkSpeedMeters: walkSpeed,
     totalDistance,
     targetMeters: totalDistance,
     targetDistance: totalDistance,
     difficultyFactor,
     juggleSpeedMultiplier,
     juggleBaseSpeed,
+    juggleSpeed: juggleBaseSpeed,
     catchWindow,
     gravityFactor: gravityInstability,
+    gravity: gravityInstability * 2.1,
     windMax: windBaseForce,
+    windBase: windBaseForce,
     windChangeFreq,
+    gustInterval: Math.max(0.75, 2.2 - speedPhase * 0.32),
     windBaseForce,
     gravityInstability,
     defaultObjects,
+    ballCount: defaultObjects,
+    stepSwayImpulse,
+    catchRecoilImpulse,
   };
 }
 
 // ============================================================================
-// BLOQUE 1: MOTOR DE AUDIO PROCEDURAL (`Web Audio API`) + VIBRACIÓN HÁPTICA MÓVIL
+// MOTOR DE AUDIO PROCEDURAL (`Web Audio API`) + VIBRACIÓN HÁPTICA MÓVIL
 // ============================================================================
 const PENTATONIC_SCALE = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
 
@@ -1273,6 +1573,68 @@ class ProceduralAudio {
     gain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.36);
+  }
+
+  playHookRescue() {
+    this.playGrapple();
+  }
+
+  playNearMiss() {
+    this.playNearMissSave();
+  }
+
+  playFallScream() {
+    this.playFall();
+  }
+
+  playFrenzyStart() {
+    this.playVictory();
+  }
+
+  playMissAlert() {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([35, 25, 45]);
+    }
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(195, now);
+    osc.frequency.exponentialRampToValueAtTime(98, now + 0.22);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  }
+
+  playFootstep(walkSpeed = 1) {
+    if (this.muted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    const baseFreq = 92 + Math.min(45, (walkSpeed - 1) * 30);
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.065);
+    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.075);
+  }
+
+  updateWind(windForce = 0) {
+    if (Math.abs(windForce) > 0.85 && Math.random() < 0.015) {
+      this.playWindGust();
+    }
   }
 }
 

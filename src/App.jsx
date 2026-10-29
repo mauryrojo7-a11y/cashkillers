@@ -1,1301 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import * as THREE from 'three';
 import {
-  COUNTRIES_LIST,
-  getCountryOption,
+  STORAGE_KEY,
   CITIES,
+  VIP_CITIES,
   SKINS,
+  BALANCE_POLES,
+  PERMANENT_MULTIPLIERS,
   JUGGLE_PROPS,
-  ARMORY_ITEMS,
-  SEASON_RIVALS,
+  GEAR_ITEMS,
+  getArmoryUpgradeCost,
   SEASON_REWARD_TIERS,
   STORE_BUNDLES,
   I18N,
   getLevelConfig,
-  getSeasonTimeRemaining,
   soundEngine,
 } from './gameData';
-
-const STORAGE_KEY = 'NO_MIRES_ABAJO_PLAYSTORE_V3';
-const ONLINE_LEADERBOARD_KEY = 'nma_online_leaderboard_v1';
-const CRITICAL_ANGLE_RAD = 0.82; // ~47 degrees critical fall angle
-
-// ============================================================================
-// UTILIDADES DE PERFIL OBLIGATORIO Y SINCRONIZACIÓN EN TIEMPO REAL CON LIGA ONLINE
-// ============================================================================
-function isValidPlayerName(name) {
-  if (typeof name !== 'string') return false;
-  const trimmed = name.trim();
-  if (
-    !trimmed ||
-    trimmed === 'TÚ (Equilibrista)' ||
-    trimmed === 'YOU (Tightrope Pro)' ||
-    trimmed === 'YOU (Tightrope Walker)'
-  ) {
-    return false;
-  }
-  const nonSpaceChars = trimmed.replace(/\s+/g, '');
-  return nonSpaceChars.length >= 2 && trimmed.length <= 16;
-}
-
-function getOrCreatePlayerId() {
-  try {
-    const existing = localStorage.getItem('nma_player_id');
-    if (existing && existing.trim().length > 0) {
-      return existing.trim();
-    }
-    const generated =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : 'nma_' +
-          Array.from({ length: 16 }, () =>
-            Math.floor(Math.random() * 16).toString(16)
-          ).join('') +
-          '_' +
-          Date.now().toString(16);
-    localStorage.setItem('nma_player_id', generated);
-    return generated;
-  } catch {
-    return 'nma_' + Date.now().toString(16);
-  }
-}
-
-function loadInitialOnboardingState(savedProfile) {
-  try {
-    const completed = localStorage.getItem('nma_profile_completed') === 'true';
-    const rawName =
-      localStorage.getItem('nma_player_name') || savedProfile?.playerName || '';
-    const rawCountry =
-      localStorage.getItem('nma_player_country') ||
-      savedProfile?.playerCountry ||
-      'AR';
-    const existingId =
-      localStorage.getItem('nma_player_id') || savedProfile?.playerId || '';
-
-    const valid = completed && isValidPlayerName(rawName);
-    const countryOpt = getCountryOption(rawCountry);
-
-    return {
-      needsOnboarding: !valid,
-      playerId: existingId,
-      playerName: valid ? rawName.trim() : '',
-      playerCountry: countryOpt.code,
-    };
-  } catch {
-    return {
-      needsOnboarding: true,
-      playerId: '',
-      playerName: '',
-      playerCountry: 'AR',
-    };
-  }
-}
-
-function loadOnlineLeaderboardRegistry() {
-  try {
-    const raw = localStorage.getItem(ONLINE_LEADERBOARD_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// ============================================================================
-// GENERADORES DE TEXTURAS Y SHADERS "VECTOR" (EJECUTADOS 1 SOLA VEZ AL INICIAR)
-// ============================================================================
-
-function createVectorSilhouetteMaterial() {
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      uBaseColor: { value: new THREE.Color(0x06080e) },
-      uRimColor: { value: new THREE.Color(0x00f2fe) },
-      uRimPower: { value: 2.15 },
-      uRimStrength: { value: 0.96 },
-    },
-    vertexShader: `
-      varying vec3 vNormal;
-      varying vec3 vViewDir;
-      void main() {
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        vNormal = normalize(normalMatrix * normal);
-        vViewDir = normalize(-mvPosition.xyz);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 uBaseColor;
-      uniform vec3 uRimColor;
-      uniform float uRimPower;
-      uniform float uRimStrength;
-      varying vec3 vNormal;
-      varying vec3 vViewDir;
-      void main() {
-        float ndotv = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
-        float fresnel = pow(1.0 - ndotv, uRimPower);
-        float rim = smoothstep(0.22, 0.86, fresnel) * uRimStrength;
-        vec3 finalCol = mix(uBaseColor, uRimColor, rim);
-        gl_FragColor = vec4(finalCol, 1.0);
-      }
-    `,
-  });
-}
-
-function createBacklitHorizonTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 512;
-  const g = c.getContext('2d');
-
-  const grad = g.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0.0, '#030712');
-  grad.addColorStop(0.22, '#07162c');
-  grad.addColorStop(0.44, '#0c2d48');
-  grad.addColorStop(0.56, '#145374');
-  grad.addColorStop(0.64, '#0ea5e9');
-  grad.addColorStop(0.72, '#0c2d48');
-  grad.addColorStop(1.0, '#030712');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 256, 512);
-
-  const rad = g.createRadialGradient(128, 305, 10, 128, 305, 135);
-  rad.addColorStop(0.0, 'rgba(0, 242, 254, 0.52)');
-  rad.addColorStop(0.45, 'rgba(14, 165, 233, 0.26)');
-  rad.addColorStop(1.0, 'rgba(7, 22, 44, 0.0)');
-  g.fillStyle = rad;
-  g.fillRect(0, 0, 256, 512);
-
-  return new THREE.CanvasTexture(c);
-}
-
-function createBraidedCableTexture() {
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 128;
-  const g = c.getContext('2d');
-
-  const grad = g.createLinearGradient(0, 0, 64, 0);
-  grad.addColorStop(0, '#0f172a');
-  grad.addColorStop(0.35, '#475569');
-  grad.addColorStop(0.5, '#e2e8f0');
-  grad.addColorStop(0.65, '#334155');
-  grad.addColorStop(1, '#090d16');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 128);
-
-  g.strokeStyle = '#06080e';
-  g.lineWidth = 5;
-  for (let y = -32; y < 160; y += 16) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(64, y + 24);
-    g.stroke();
-
-    g.strokeStyle = 'rgba(0, 242, 254, 0.85)';
-    g.lineWidth = 2;
-    g.beginPath();
-    g.moveTo(0, y + 5);
-    g.lineTo(64, y + 29);
-    g.stroke();
-
-    g.strokeStyle = '#06080e';
-    g.lineWidth = 5;
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 720);
-  return tex;
-}
-
-function createSkyscraperWindowTexture(isDistantLayer = false) {
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 256;
-  const g = c.getContext('2d');
-
-  g.fillStyle = isDistantLayer ? '#081c30' : '#051020';
-  g.fillRect(0, 0, 128, 256);
-
-  const cols = 8;
-  const rows = 26;
-  const cw = 128 / cols;
-  const ch = 256 / rows;
-
-  for (let r = 0; r < rows; r++) {
-    for (let col = 0; col < cols; col++) {
-      const seed = (r * 37 + col * 19) % 29;
-      if (seed < (isDistantLayer ? 18 : 12)) continue;
-      if (seed % 5 === 0) {
-        g.fillStyle = isDistantLayer
-          ? 'rgba(0, 242, 254, 0.35)'
-          : 'rgba(0, 242, 254, 0.72)';
-      } else if (seed % 7 === 0) {
-        g.fillStyle = isDistantLayer
-          ? 'rgba(253, 224, 71, 0.28)'
-          : 'rgba(253, 224, 71, 0.62)';
-      } else {
-        g.fillStyle = isDistantLayer
-          ? 'rgba(125, 211, 252, 0.25)'
-          : 'rgba(186, 230, 253, 0.45)';
-      }
-      g.fillRect(col * cw + 3, r * ch + 2, cw - 6, ch - 4);
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-
-function createHelipadTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 256;
-  const g = c.getContext('2d');
-
-  g.fillStyle = '#060c18';
-  g.fillRect(0, 0, 256, 256);
-
-  g.strokeStyle = '#00f2fe';
-  g.lineWidth = 10;
-  g.beginPath();
-  g.arc(128, 128, 102, 0, Math.PI * 2);
-  g.stroke();
-
-  g.strokeStyle = '#fde047';
-  g.lineWidth = 5;
-  g.beginPath();
-  g.arc(128, 128, 84, 0, Math.PI * 2);
-  g.stroke();
-
-  g.fillStyle = '#00f2fe';
-  g.font = '900 110px sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText('H', 128, 132);
-
-  return new THREE.CanvasTexture(c);
-}
-
-// ============================================================================
-// CONSTRUCCIÓN DE LA ESCENA 3D WEBGL (`Three.js`) — ESTÉTICA "VECTOR" + CLIMA 3D
-// ============================================================================
-function buildThreeWorld(mountEl) {
-  const width = mountEl.clientWidth || 420;
-  const height = mountEl.clientHeight || 780;
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x061326);
-  scene.fog = new THREE.FogExp2(0x0a2239, 0.011);
-
-  const camera = new THREE.PerspectiveCamera(58, width / height, 0.1, 600);
-  camera.position.set(0, 3.4, 6.2);
-  camera.lookAt(0, 1.65, -15);
-
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.22;
-
-  mountEl.innerHTML = '';
-  mountEl.appendChild(renderer.domElement);
-
-  const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.85);
-  scene.add(ambientLight);
-
-  const rimDirLight = new THREE.DirectionalLight(0x00f2fe, 1.65);
-  rimDirLight.position.set(0, 28, -65);
-  scene.add(rimDirLight);
-
-  const cyanPoleLight = new THREE.PointLight(0x00f2fe, 3.8, 22);
-  cyanPoleLight.position.set(0, 1.35, 0);
-  scene.add(cyanPoleLight);
-
-  const goldOrbLight = new THREE.PointLight(0xfde047, 4.2, 24);
-  goldOrbLight.position.set(0, 2.5, -0.3);
-  scene.add(goldOrbLight);
-
-  const backlitTex = createBacklitHorizonTexture();
-  const backlitGeo = new THREE.PlaneGeometry(340, 220);
-  const backlitMat = new THREE.MeshBasicMaterial({
-    map: backlitTex,
-    fog: false,
-    depthWrite: false,
-  });
-  const backlitBackdrop = new THREE.Mesh(backlitGeo, backlitMat);
-  backlitBackdrop.position.set(0, 12, -210);
-  scene.add(backlitBackdrop);
-
-  // Cable de acero en el eje Z (`X = 0, Y = 0`)
-  const maxCableLen = 1800;
-  const cableTex = createBraidedCableTexture();
-  const cableGeo = new THREE.CylinderGeometry(0.042, 0.042, maxCableLen, 16);
-  cableGeo.rotateX(Math.PI / 2);
-  const cableMat = new THREE.MeshStandardMaterial({
-    color: 0xcbd5e1,
-    map: cableTex,
-    metalness: 0.9,
-    roughness: 0.18,
-    emissive: 0x00f2fe,
-    emissiveIntensity: 0.38,
-  });
-  const cableMesh = new THREE.Mesh(cableGeo, cableMat);
-  cableMesh.position.set(0, 0, -maxCableLen * 0.5 + 12);
-  scene.add(cableMesh);
-
-  const coreWireGeo = new THREE.CylinderGeometry(0.015, 0.015, maxCableLen, 8);
-  coreWireGeo.rotateX(Math.PI / 2);
-  const coreWireMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.72,
-  });
-  const coreWireMesh = new THREE.Mesh(coreWireGeo, coreWireMat);
-  coreWireMesh.position.set(0, 0.022, -maxCableLen * 0.5 + 12);
-  scene.add(coreWireMesh);
-
-  // Azotea de salida y llegada
-  const roofMat = new THREE.MeshStandardMaterial({
-    color: 0x050912,
-    roughness: 0.8,
-    metalness: 0.2,
-  });
-  const startRoofGeo = new THREE.BoxGeometry(7.2, 60, 7);
-  const startRoof = new THREE.Mesh(startRoofGeo, roofMat);
-  startRoof.position.set(0, -30.045, 3.5);
-  scene.add(startRoof);
-
-  const arrivalGroup = new THREE.Group();
-  const endTowerGeo = new THREE.BoxGeometry(9.2, 70, 9.2);
-  const endTowerMesh = new THREE.Mesh(endTowerGeo, roofMat);
-  endTowerMesh.position.set(0, -35.045, 0);
-  arrivalGroup.add(endTowerMesh);
-
-  const helipadTex = createHelipadTexture();
-  const helipadGeo = new THREE.PlaneGeometry(7.0, 7.0);
-  helipadGeo.rotateX(-Math.PI / 2);
-  const helipadMat = new THREE.MeshBasicMaterial({ map: helipadTex });
-  const helipadMesh = new THREE.Mesh(helipadGeo, helipadMat);
-  helipadMesh.position.set(0, 0.01, 0);
-  arrivalGroup.add(helipadMesh);
-
-  const beaconRingGeo = new THREE.TorusGeometry(3.4, 0.075, 12, 36);
-  beaconRingGeo.rotateX(Math.PI / 2);
-  const beaconRingMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
-  const beaconRingMesh = new THREE.Mesh(beaconRingGeo, beaconRingMat);
-  beaconRingMesh.position.set(0, 0.12, 0);
-  arrivalGroup.add(beaconRingMesh);
-
-  arrivalGroup.position.set(0, 0, -100);
-  scene.add(arrivalGroup);
-
-  // Rascacielos en capas de profundidad atmosférica + haces de luz nocturnos
-  const nearWinTex = createSkyscraperWindowTexture(false);
-  const farWinTex = createSkyscraperWindowTexture(true);
-
-  const nearBuildingMat = new THREE.MeshStandardMaterial({
-    color: 0x071526,
-    map: nearWinTex,
-    emissive: 0x0ea5e9,
-    emissiveMap: nearWinTex,
-    emissiveIntensity: 0.58,
-    roughness: 0.5,
-    metalness: 0.4,
-  });
-
-  const midSilhouetteMat = new THREE.MeshBasicMaterial({
-    color: 0x0b2239,
-    map: farWinTex,
-  });
-
-  const farMistyMat = new THREE.MeshBasicMaterial({
-    color: 0x113654,
-  });
-
-  const rimEdgeMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.35,
-  });
-
-  const skyscrapers = [];
-  for (let i = 0; i < 44; i++) {
-    const isLeft = i % 2 === 0;
-    const layer = i % 3;
-    const rowIdx = Math.floor(i / 2);
-
-    const bw = 6.5 + (i % 4) * 2.1 + layer * 2.2;
-    const bd = 6.5 + ((i * 3) % 4) * 1.8;
-    const bh = 72 + ((i * 13) % 42) + layer * 16;
-
-    const bGeo = new THREE.BoxGeometry(bw, bh, bd);
-    const mat =
-      layer === 0
-        ? nearBuildingMat
-        : layer === 1
-          ? midSilhouetteMat
-          : farMistyMat;
-    const bMesh = new THREE.Mesh(bGeo, mat);
-
-    const lateralDist =
-      layer === 0
-        ? 12.2 + (i % 3) * 2.8
-        : layer === 1
-          ? 21.5 + (i % 3) * 4.2
-          : 32.0 + (i % 4) * 5.0;
-    const xOffset = (isLeft ? -1 : 1) * lateralDist;
-    const zPos = 10 - rowIdx * 13;
-    const yPos = -60 + bh * 0.5;
-    bMesh.position.set(xOffset, yPos, zPos);
-
-    if (layer === 0) {
-      const edgeGeo = new THREE.BoxGeometry(0.12, bh, 0.12);
-      const edgeMesh = new THREE.Mesh(edgeGeo, rimEdgeMat);
-      edgeMesh.position.set(
-        isLeft ? bw * 0.5 + 0.04 : -bw * 0.5 - 0.04,
-        0,
-        bd * 0.5
-      );
-      bMesh.add(edgeMesh);
-    }
-
-    scene.add(bMesh);
-    skyscrapers.push(bMesh);
-  }
-
-  const spotlightBeams = [];
-  const beamGeo = new THREE.ConeGeometry(5.5, 115, 20, 1, true);
-  for (let i = 0; i < 10; i++) {
-    const isLeft = i % 2 === 0;
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: i % 3 === 0 ? 0x00f2fe : 0x0ea5e9,
-      transparent: true,
-      opacity: i % 3 === 0 ? 0.11 : 0.075,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
-    const xPos = (isLeft ? -1 : 1) * (8.5 + (i % 3) * 4.5);
-    const zPos = -18 - i * 24;
-    beamMesh.position.set(xPos, 8, zPos);
-    beamMesh.rotation.z = (isLeft ? -1 : 1) * 0.24;
-    scene.add(beamMesh);
-    spotlightBeams.push({
-      mesh: beamMesh,
-      mat: beamMat,
-      baseAngle: (isLeft ? -1 : 1) * 0.24,
-      speed: 0.45 + (i % 4) * 0.18,
-      phaseOffset: i * 1.1,
-    });
-  }
-
-  // Estelas de tránsito nocturno allá abajo en el abismo
-  const carMeshes = [];
-  const carGeo = new THREE.BoxGeometry(0.4, 0.18, 2.2);
-  const cyanCarMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
-  const redCarMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-  for (let i = 0; i < 20; i++) {
-    const isRed = i % 2 === 0;
-    const cMesh = new THREE.Mesh(carGeo, isRed ? redCarMat : cyanCarMat);
-    const laneX = ((i % 4) - 1.5) * 2.1;
-    cMesh.position.set(laneX, -36, -i * 12);
-    scene.add(cMesh);
-    carMeshes.push({
-      mesh: cMesh,
-      speed: (isRed ? -1 : 1) * (15 + (i % 4) * 3.5),
-    });
-  }
-
-  // ============================================================================
-  // BLOQUE 4: POOL DE PARTÍCULAS CLIMÁTICAS 3D RECICLADAS (`THREE.Points`, CERO GC)
-  // ============================================================================
-  const weatherCount = 220;
-  const weatherPositions = new Float32Array(weatherCount * 3);
-  for (let i = 0; i < weatherCount; i++) {
-    weatherPositions[i * 3 + 0] = (Math.random() - 0.5) * 28;
-    weatherPositions[i * 3 + 1] = -6 + Math.random() * 20;
-    weatherPositions[i * 3 + 2] = 6 - Math.random() * 55;
-  }
-  const weatherGeo = new THREE.BufferGeometry();
-  weatherGeo.setAttribute('position', new THREE.BufferAttribute(weatherPositions, 3));
-  const weatherMat = new THREE.PointsMaterial({
-    color: 0x00f2fe,
-    size: 0.14,
-    transparent: true,
-    opacity: 0.65,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const weatherPoints = new THREE.Points(weatherGeo, weatherMat);
-  scene.add(weatherPoints);
-
-  // ============================================================================
-  // ACRÓBATA EN SILUETA NEGRA MATE (`0x06080e`) + RIM LIGHT CIAN (`0x00f2fe`)
-  // ============================================================================
-  const acrobatGroup = new THREE.Group();
-  acrobatGroup.position.set(0, 0, 0);
-  scene.add(acrobatGroup);
-
-  const vectorSilhouetteMat = createVectorSilhouetteMaterial();
-  const pureCyanNeonMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-  });
-
-  const createArticulatedLeg = (isLeft) => {
-    const hipGroup = new THREE.Group();
-    hipGroup.position.set(isLeft ? -0.08 : 0.08, 0.88, 0);
-
-    const thighGeo = new THREE.CapsuleGeometry(0.064, 0.34, 10, 18);
-    const thighMesh = new THREE.Mesh(thighGeo, vectorSilhouetteMat);
-    thighMesh.position.set(isLeft ? 0.018 : -0.018, -0.19, 0);
-    thighMesh.rotation.z = isLeft ? 0.05 : -0.05;
-    hipGroup.add(thighMesh);
-
-    const kneeGroup = new THREE.Group();
-    kneeGroup.position.set(isLeft ? 0.035 : -0.035, -0.41, 0);
-    hipGroup.add(kneeGroup);
-
-    const calfGeo = new THREE.CapsuleGeometry(0.05, 0.34, 10, 18);
-    const calfMesh = new THREE.Mesh(calfGeo, vectorSilhouetteMat);
-    calfMesh.position.set(isLeft ? 0.02 : -0.02, -0.2, 0);
-    calfMesh.rotation.z = isLeft ? 0.04 : -0.04;
-    kneeGroup.add(calfMesh);
-
-    const bootGroup = new THREE.Group();
-    bootGroup.position.set(isLeft ? 0.035 : -0.035, -0.43, 0);
-    kneeGroup.add(bootGroup);
-
-    const footGeo = new THREE.CapsuleGeometry(0.042, 0.14, 8, 14);
-    footGeo.rotateX(Math.PI / 2);
-    const footMesh = new THREE.Mesh(footGeo, vectorSilhouetteMat);
-    footMesh.position.set(0, -0.01, -0.025);
-    bootGroup.add(footMesh);
-
-    return { hipGroup, kneeGroup, bootGroup };
-  };
-
-  const leftLeg = createArticulatedLeg(true);
-  const rightLeg = createArticulatedLeg(false);
-  acrobatGroup.add(leftLeg.hipGroup);
-  acrobatGroup.add(rightLeg.hipGroup);
-
-  const upperBodyGroup = new THREE.Group();
-  acrobatGroup.add(upperBodyGroup);
-
-  const pelvisGeo = new THREE.CylinderGeometry(0.135, 0.12, 0.15, 18);
-  pelvisGeo.scale(1.15, 1, 0.72);
-  const pelvisMesh = new THREE.Mesh(pelvisGeo, vectorSilhouetteMat);
-  pelvisMesh.position.set(0, 0.89, 0);
-  upperBodyGroup.add(pelvisMesh);
-
-  const torsoSpineGroup = new THREE.Group();
-  torsoSpineGroup.position.set(0, 0.95, 0);
-  upperBodyGroup.add(torsoSpineGroup);
-
-  const lowerTorsoGeo = new THREE.CylinderGeometry(0.165, 0.125, 0.24, 18);
-  lowerTorsoGeo.scale(1.18, 1, 0.68);
-  const lowerTorsoMesh = new THREE.Mesh(lowerTorsoGeo, vectorSilhouetteMat);
-  lowerTorsoMesh.position.set(0, 0.12, 0);
-  torsoSpineGroup.add(lowerTorsoMesh);
-
-  const chestGeo = new THREE.CylinderGeometry(0.215, 0.162, 0.28, 20);
-  chestGeo.scale(1.24, 1, 0.68);
-  const chestMesh = new THREE.Mesh(chestGeo, vectorSilhouetteMat);
-  chestMesh.position.set(0, 0.35, 0);
-  torsoSpineGroup.add(chestMesh);
-
-  // Tira dorsal de energía (se enciende al doble en Modo Frenesí Combo x10)
-  const dorsalStripGeo = new THREE.BoxGeometry(0.036, 0.38, 0.024);
-  const dorsalStripMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.45,
-  });
-  const dorsalStripMesh = new THREE.Mesh(dorsalStripGeo, dorsalStripMat);
-  dorsalStripMesh.position.set(0, 0.26, 0.13);
-  torsoSpineGroup.add(dorsalStripMesh);
-
-  const shoulderCapGeo = new THREE.SphereGeometry(0.078, 16, 16);
-  const leftCapMesh = new THREE.Mesh(shoulderCapGeo, vectorSilhouetteMat);
-  leftCapMesh.position.set(-0.255, 0.45, 0);
-  torsoSpineGroup.add(leftCapMesh);
-
-  const rightCapMesh = new THREE.Mesh(shoulderCapGeo, vectorSilhouetteMat);
-  rightCapMesh.position.set(0.255, 0.45, 0);
-  torsoSpineGroup.add(rightCapMesh);
-
-  const neckGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.1, 14);
-  const neckMesh = new THREE.Mesh(neckGeo, vectorSilhouetteMat);
-  neckMesh.position.set(0, 0.54, 0);
-  torsoSpineGroup.add(neckMesh);
-
-  const headGroup = new THREE.Group();
-  headGroup.position.set(0, 0.67, 0);
-  torsoSpineGroup.add(headGroup);
-
-  const craniumGeo = new THREE.SphereGeometry(0.118, 24, 24);
-  craniumGeo.scale(0.95, 1.06, 1.02);
-  const craniumMesh = new THREE.Mesh(craniumGeo, vectorSilhouetteMat);
-  headGroup.add(craniumMesh);
-
-  const headbandGeo = new THREE.TorusGeometry(0.116, 0.016, 12, 28);
-  headbandGeo.rotateX(Math.PI / 2);
-  const headbandMesh = new THREE.Mesh(headbandGeo, pureCyanNeonMat);
-  headbandMesh.position.set(0, 0.025, 0);
-  headGroup.add(headbandMesh);
-
-  const ribbonPivot = new THREE.Group();
-  ribbonPivot.position.set(0, 0.022, 0.118);
-  headGroup.add(ribbonPivot);
-
-  const segGeo1 = new THREE.BoxGeometry(0.16, 0.028, 0.008);
-  segGeo1.translate(0.08, 0, 0);
-  const ribbonSeg1 = new THREE.Mesh(segGeo1, pureCyanNeonMat);
-  ribbonPivot.add(ribbonSeg1);
-
-  const ribbonJoint2 = new THREE.Group();
-  ribbonJoint2.position.set(0.155, 0, 0);
-  ribbonSeg1.add(ribbonJoint2);
-
-  const segGeo2 = new THREE.BoxGeometry(0.16, 0.024, 0.007);
-  segGeo2.translate(0.08, 0, 0);
-  const ribbonSeg2 = new THREE.Mesh(segGeo2, pureCyanNeonMat);
-  ribbonJoint2.add(ribbonSeg2);
-
-  const ribbonJoint3 = new THREE.Group();
-  ribbonJoint3.position.set(0.155, 0, 0);
-  ribbonSeg2.add(ribbonJoint3);
-
-  const segGeo3 = new THREE.BoxGeometry(0.15, 0.018, 0.006);
-  segGeo3.translate(0.075, 0, 0);
-  const ribbonSeg3 = new THREE.Mesh(segGeo3, pureCyanNeonMat);
-  ribbonJoint3.add(ribbonSeg3);
-
-  const createArticulatedArm = (isLeft) => {
-    const shoulderGroup = new THREE.Group();
-    shoulderGroup.position.set(isLeft ? -0.255 : 0.255, 0.44, 0);
-
-    const upperArmGeo = new THREE.CapsuleGeometry(0.048, 0.22, 10, 16);
-    const upperArmMesh = new THREE.Mesh(upperArmGeo, vectorSilhouetteMat);
-    upperArmMesh.position.set(isLeft ? -0.08 : 0.08, -0.11, -0.02);
-    upperArmMesh.rotation.z = isLeft ? -0.56 : 0.56;
-    shoulderGroup.add(upperArmMesh);
-
-    const elbowGroup = new THREE.Group();
-    elbowGroup.position.set(isLeft ? -0.16 : 0.16, -0.21, -0.04);
-    shoulderGroup.add(elbowGroup);
-
-    const forearmGeo = new THREE.CapsuleGeometry(0.042, 0.21, 10, 16);
-    const forearmMesh = new THREE.Mesh(forearmGeo, vectorSilhouetteMat);
-    forearmMesh.position.set(isLeft ? -0.07 : 0.07, -0.04, -0.09);
-    forearmMesh.rotation.x = 0.72;
-    forearmMesh.rotation.z = isLeft ? -0.45 : 0.45;
-    elbowGroup.add(forearmMesh);
-
-    const handGeo = new THREE.SphereGeometry(0.046, 14, 14);
-    const handMesh = new THREE.Mesh(handGeo, vectorSilhouetteMat);
-    handMesh.position.set(isLeft ? -0.14 : 0.14, -0.08, -0.18);
-    elbowGroup.add(handMesh);
-
-    return { shoulderGroup, elbowGroup, handMesh };
-  };
-
-  const leftArm = createArticulatedArm(true);
-  const rightArm = createArticulatedArm(false);
-  torsoSpineGroup.add(leftArm.shoulderGroup);
-  torsoSpineGroup.add(rightArm.shoulderGroup);
-
-  // Vara Láser de Equilibrio en Neón Cian (`0x00f2fe`)
-  const poleGroup = new THREE.Group();
-  poleGroup.position.set(0, 0.17, -0.2);
-  torsoSpineGroup.add(poleGroup);
-
-  const poleLen = 4.0;
-  const poleCoreGeo = new THREE.CylinderGeometry(0.018, 0.018, poleLen, 16);
-  poleCoreGeo.rotateZ(Math.PI / 2);
-  const poleCoreMat = new THREE.MeshBasicMaterial({
-    color: 0xe0f2fe,
-  });
-  const poleMesh = new THREE.Mesh(poleCoreGeo, poleCoreMat);
-  poleGroup.add(poleMesh);
-
-  const poleLaserGlowGeo = new THREE.CylinderGeometry(0.052, 0.052, poleLen, 14);
-  poleLaserGlowGeo.rotateZ(Math.PI / 2);
-  const poleLaserGlowMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.42,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const poleGlowMesh = new THREE.Mesh(poleLaserGlowGeo, poleLaserGlowMat);
-  poleGroup.add(poleGlowMesh);
-
-  const tipGeo = new THREE.SphereGeometry(0.055, 14, 14);
-  const leftTipMesh = new THREE.Mesh(tipGeo, pureCyanNeonMat);
-  leftTipMesh.position.set(-poleLen * 0.5, 0, 0);
-  poleGroup.add(leftTipMesh);
-
-  const rightTipMesh = new THREE.Mesh(tipGeo, pureCyanNeonMat);
-  rightTipMesh.position.set(poleLen * 0.5, 0, 0);
-  poleGroup.add(rightTipMesh);
-
-  // ============================================================================
-  // BLOQUE 2.2: LÍNEA LÁSER 3D DEL GANCHO SALVAVIDAS + DESTELLO DE PARTÍCULAS CIAN
-  // ============================================================================
-  const grappleLinePositions = new Float32Array(6);
-  const grappleLineGeo = new THREE.BufferGeometry();
-  grappleLineGeo.setAttribute(
-    'position',
-    new THREE.BufferAttribute(grappleLinePositions, 3)
-  );
-  const grappleLineMat = new THREE.LineBasicMaterial({
-    color: 0x00f2fe,
-    linewidth: 3,
-  });
-  const grappleLaserLine = new THREE.Line(grappleLineGeo, grappleLineMat);
-  grappleLaserLine.visible = false;
-  scene.add(grappleLaserLine);
-
-  const grappleBeamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 10);
-  const grappleBeamMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.85,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const grappleBeamMesh = new THREE.Mesh(grappleBeamGeo, grappleBeamMat);
-  grappleBeamMesh.visible = false;
-  scene.add(grappleBeamMesh);
-
-  const receiverGeo = new THREE.TorusGeometry(0.14, 0.012, 10, 28);
-  const leftReceiverMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.55,
-    blending: THREE.AdditiveBlending,
-  });
-  const rightReceiverMat = new THREE.MeshBasicMaterial({
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.55,
-    blending: THREE.AdditiveBlending,
-  });
-  const leftReceiverRing = new THREE.Mesh(receiverGeo, leftReceiverMat);
-  const rightReceiverRing = new THREE.Mesh(receiverGeo, rightReceiverMat);
-  scene.add(leftReceiverRing);
-  scene.add(rightReceiverRing);
-
-  // Esferas doradas incandescentes (`0xfde047`) con estela de luz
-  const orbCoreGeo = new THREE.SphereGeometry(0.12, 24, 24);
-  const orbHaloGeo = new THREE.SphereGeometry(0.24, 16, 16);
-  const trailSphereGeo = new THREE.SphereGeometry(0.072, 12, 12);
-
-  const orbCoreMat = new THREE.MeshBasicMaterial({
-    color: 0xfef9c3,
-  });
-  const orbHaloMat = new THREE.MeshBasicMaterial({
-    color: 0xfde047,
-    transparent: true,
-    opacity: 0.52,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-
-  const orbMeshes = [];
-  for (let i = 0; i < 4; i++) {
-    const group = new THREE.Group();
-    const core = new THREE.Mesh(orbCoreGeo, orbCoreMat);
-    const halo = new THREE.Mesh(orbHaloGeo, orbHaloMat);
-    group.add(core);
-    group.add(halo);
-    scene.add(group);
-
-    const trails = [];
-    for (let tIdx = 0; tIdx < 7; tIdx++) {
-      const tMat = new THREE.MeshBasicMaterial({
-        color: tIdx < 3 ? 0xfde047 : 0xf59e0b,
-        transparent: true,
-        opacity: 0.68 - tIdx * 0.085,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const tMesh = new THREE.Mesh(trailSphereGeo, tMat);
-      const scale = 1 - tIdx * 0.12;
-      tMesh.scale.set(scale, scale, scale);
-      scene.add(tMesh);
-      trails.push(tMesh);
-    }
-
-    orbMeshes.push({ group, core, halo, trails });
-  }
-
-  return {
-    scene,
-    camera,
-    renderer,
-    ambientLight,
-    rimDirLight,
-    cyanPoleLight,
-    goldOrbLight,
-    backlitBackdrop,
-    cableTex,
-    arrivalGroup,
-    beaconRingMesh,
-    skyscrapers,
-    spotlightBeams,
-    carMeshes,
-    weatherPoints,
-    weatherGeo,
-    weatherMat,
-    weatherCount,
-    acrobatGroup,
-    vectorSilhouetteMat,
-    dorsalStripMat,
-    poleCoreMat,
-    poleLaserGlowMat,
-    poleGlowMesh,
-    upperBodyGroup,
-    torsoSpineGroup,
-    headGroup,
-    leftLeg,
-    rightLeg,
-    leftArm,
-    rightArm,
-    poleGroup,
-    ribbonPivot,
-    ribbonJoint2,
-    ribbonJoint3,
-    grappleLaserLine,
-    grappleLineGeo,
-    grappleBeamMesh,
-    leftReceiverRing,
-    rightReceiverRing,
-    leftReceiverMat,
-    rightReceiverMat,
-    orbMeshes,
-    worldLeftHand: new THREE.Vector3(),
-    worldRightHand: new THREE.Vector3(),
-    grappleAnchor: new THREE.Vector3(),
-    activeCityIndex: -1,
-  };
-}
-
-// ============================================================================
-// ACTUALIZACIÓN POR FRAME DEL MUNDO 3D — CAÍDA 3D, GANCHO, MODO FRENESÍ Y CLIMA
-// (CERO GARBAGE COLLECTION)
-// ============================================================================
-function updateAndRenderThreeScene(threeCtx, eng, dt) {
-  if (!threeCtx) return;
-
-  const playerZ = -eng.distance;
-  const angle = eng.angle;
-  const absAngle = Math.abs(angle);
-  const tiltRatio = Math.min(1, absAngle / CRITICAL_ANGLE_RAD);
-  const speedMult = eng.walkSpeedMultiplier || 1.0;
-
-  // ============================================================================
-  // BLOQUE 4: IDENTIDAD ATMOSFÉRICA Y CLIMÁTICA 3D PARA LAS 20 CIUDADES
-  // ============================================================================
-  const city = eng.cfg?.city || CITIES[0];
-  if (threeCtx.activeCityIndex !== eng.cityIndex) {
-    threeCtx.activeCityIndex = eng.cityIndex;
-    const arch = city.weatherArchetype || 'urban';
-    if (arch === 'cyber_rain') {
-      threeCtx.scene.background.setHex(0x06091e);
-      threeCtx.scene.fog.color.setHex(0x0e1842);
-      threeCtx.weatherMat.color.setHex(0x00f2fe);
-      threeCtx.weatherMat.size = 0.16;
-    } else if (arch === 'golden_embers') {
-      threeCtx.scene.background.setHex(0x120918);
-      threeCtx.scene.fog.color.setHex(0x28172c);
-      threeCtx.weatherMat.color.setHex(0xfde047);
-      threeCtx.weatherMat.size = 0.18;
-    } else if (arch === 'blizzard') {
-      threeCtx.scene.background.setHex(0x061326);
-      threeCtx.scene.fog.color.setHex(0x102c4e);
-      threeCtx.weatherMat.color.setHex(0xe0f2fe);
-      threeCtx.weatherMat.size = 0.2;
-    } else {
-      threeCtx.scene.background.setHex(0x051124);
-      threeCtx.scene.fog.color.setHex(0x0a2239);
-      threeCtx.weatherMat.color.setHex(0x38bdf8);
-      threeCtx.weatherMat.size = 0.14;
-    }
-  }
-
-  // Actualizar partículas climáticas 3D en su BufferAttribute (cero GC)
-  const posAttr = threeCtx.weatherGeo.attributes.position;
-  const arr = posAttr.array;
-  const arch = city.weatherArchetype || 'urban';
-  const windX = (eng.windCurrent || 0) * (arch === 'blizzard' ? 14.0 : 9.5);
-  const fallSpeedY =
-    arch === 'cyber_rain'
-      ? -24.0
-      : arch === 'blizzard'
-        ? -6.5
-        : arch === 'golden_embers'
-          ? 2.2
-          : -1.8;
-
-  for (let i = 0; i < threeCtx.weatherCount; i++) {
-    const idx = i * 3;
-    arr[idx + 0] += windX * dt;
-    arr[idx + 1] += fallSpeedY * dt;
-
-    if (arr[idx + 0] > 15) arr[idx + 0] -= 30;
-    else if (arr[idx + 0] < -15) arr[idx + 0] += 30;
-
-    if (fallSpeedY < 0 && arr[idx + 1] < -8) {
-      arr[idx + 1] = 14;
-    } else if (fallSpeedY > 0 && arr[idx + 1] > 14) {
-      arr[idx + 1] = -8;
-    }
-
-    if (arr[idx + 2] > playerZ + 8) {
-      arr[idx + 2] -= 56;
-    } else if (arr[idx + 2] < playerZ - 50) {
-      arr[idx + 2] += 56;
-    }
-  }
-  posAttr.needsUpdate = true;
-
-  // ============================================================================
-  // BLOQUE 3.2: MODO FRENESÍ (NEON OVERDRIVE EN COMBO x10)
-  // ============================================================================
-  const isFever = eng.isFeverMode;
-  threeCtx.vectorSilhouetteMat.uniforms.uRimStrength.value = isFever ? 1.65 : 0.96;
-  threeCtx.vectorSilhouetteMat.uniforms.uRimColor.value.setHex(
-    isFever && Math.sin(eng.time * 18) > 0 ? 0xfde047 : 0x00f2fe
-  );
-  threeCtx.dorsalStripMat.opacity = isFever ? 0.95 : 0.45;
-  threeCtx.dorsalStripMat.color.setHex(isFever ? 0xfde047 : 0x00f2fe);
-  threeCtx.poleLaserGlowMat.opacity = isFever ? 0.82 : 0.42;
-  const poleScaleY = isFever ? 1.45 : 1.0;
-  threeCtx.poleGlowMesh.scale.set(poleScaleY, 1, poleScaleY);
-
-  // ============================================================================
-  // BLOQUE 2: SECUENCIA CINEMÁTICA 3D DE CAÍDA AL VACÍO + GANCHO SALVAVIDAS
-  // ============================================================================
-  const lerpFast = Math.min(1, dt * 11);
-  const lerpMed = Math.min(1, dt * 7.5);
-
-  const targetKneeFlex = tiltRatio * 0.56 + (eng.fallSlowMo ? 0.22 : 0);
-  eng.smoothKneeFlex += (targetKneeFlex - eng.smoothKneeFlex) * lerpFast;
-
-  const targetHipOffsetX = -Math.sin(angle) * 0.25;
-  eng.smoothHipX += (targetHipOffsetX - eng.smoothHipX) * lerpFast;
-
-  const isNearCritical = absAngle > CRITICAL_ANGLE_RAD * 0.75 || eng.fallSlowMo;
-  const targetEdgeSave = isNearCritical ? 1.0 : 0.0;
-  eng.edgeSaveBlend += (targetEdgeSave - eng.edgeSaveBlend) * lerpFast;
-
-  const targetTorsoComp =
-    -angle * 0.38 - Math.sin(angle) * 0.16 * (1 + eng.edgeSaveBlend * 0.45);
-  const targetNeckComp = -angle * 0.32;
-  eng.smoothTorsoComp += (targetTorsoComp - eng.smoothTorsoComp) * lerpMed;
-  eng.smoothNeckComp += (targetNeckComp - eng.smoothNeckComp) * lerpMed;
-
-  if (eng.fallSlowMo) {
-    threeCtx.acrobatGroup.position.set(eng.fallPosX, eng.fallPosY, playerZ);
-    threeCtx.acrobatGroup.rotation.z = -angle * 1.35;
-    threeCtx.acrobatGroup.rotation.x = eng.fallTumbleX;
-  } else if (eng.grappleRescueTimer > 0) {
-    const rescueRatio = eng.grappleRescueTimer / 0.45;
-    const curX = eng.rescueStartX * rescueRatio;
-    const curY = eng.rescueStartY * rescueRatio;
-    threeCtx.acrobatGroup.position.set(curX, curY, playerZ);
-    threeCtx.acrobatGroup.rotation.z = -angle * rescueRatio;
-    threeCtx.acrobatGroup.rotation.x = 0;
-  } else {
-    threeCtx.acrobatGroup.position.set(0, 0, playerZ);
-    threeCtx.acrobatGroup.rotation.z = -angle * 0.72;
-    threeCtx.acrobatGroup.rotation.x = 0;
-  }
-
-  // Ciclo de caminata elástico cuya amplitud y cadencia escalan con `walkSpeedMultiplier`
-  const isWalking = eng.gameStatus === 'PLAYING' && !eng.fallSlowMo;
-  const stepSin = isWalking ? Math.sin(eng.stepPhase) : 0;
-  const stepCos = isWalking ? Math.cos(eng.stepPhase) : 0;
-  const strideAmp = Math.min(0.56, 0.34 * Math.pow(speedMult, 0.45));
-  const walkBobY = isWalking
-    ? Math.abs(stepSin) * 0.036 * Math.min(1.5, speedMult)
-    : Math.sin(eng.time * 2.6) * 0.012;
-  const crouchDropY = eng.smoothKneeFlex * 0.22;
-
-  threeCtx.upperBodyGroup.position.x = eng.smoothHipX;
-  threeCtx.upperBodyGroup.position.y = walkBobY - crouchDropY;
-
-  const pedalWave = Math.sin(eng.time * 22) * eng.edgeSaveBlend;
-  const kneeBendExtra = eng.smoothKneeFlex * 0.95;
-
-  threeCtx.leftLeg.hipGroup.position.x = -0.08 + eng.smoothHipX * 0.65;
-  threeCtx.rightLeg.hipGroup.position.x = 0.08 + eng.smoothHipX * 0.65;
-  threeCtx.leftLeg.hipGroup.position.y = 0.88 - crouchDropY;
-  threeCtx.rightLeg.hipGroup.position.y = 0.88 - crouchDropY;
-
-  const legCounterZ = -eng.smoothHipX * 0.75;
-  const leftKickOut =
-    angle > 0 ? eng.edgeSaveBlend * (0.28 + Math.abs(pedalWave) * 0.22) : 0;
-  const rightKickOut =
-    angle < 0 ? -eng.edgeSaveBlend * (0.28 + Math.abs(pedalWave) * 0.22) : 0;
-
-  threeCtx.leftLeg.hipGroup.rotation.z = legCounterZ - leftKickOut;
-  threeCtx.rightLeg.hipGroup.rotation.z = legCounterZ - rightKickOut;
-
-  threeCtx.leftLeg.hipGroup.rotation.x =
-    stepSin * strideAmp + kneeBendExtra * 0.55 + pedalWave * 0.25;
-  threeCtx.leftLeg.kneeGroup.rotation.x =
-    -Math.max(0, stepCos) * (strideAmp * 1.22) - kneeBendExtra * 1.1;
-  threeCtx.leftLeg.bootGroup.rotation.x = kneeBendExtra * 0.52;
-
-  threeCtx.rightLeg.hipGroup.rotation.x =
-    -stepSin * strideAmp + kneeBendExtra * 0.55 - pedalWave * 0.25;
-  threeCtx.rightLeg.kneeGroup.rotation.x =
-    -Math.max(0, -stepCos) * (strideAmp * 1.22) - kneeBendExtra * 1.1;
-  threeCtx.rightLeg.bootGroup.rotation.x = kneeBendExtra * 0.52;
-
-  const forwardLean = isWalking ? Math.min(0.24, (speedMult - 1) * 0.14) : 0;
-  threeCtx.torsoSpineGroup.rotation.z =
-    eng.smoothTorsoComp + pedalWave * 0.08;
-  threeCtx.torsoSpineGroup.rotation.x =
-    0.06 + forwardLean + eng.smoothKneeFlex * 0.18 + eng.edgeSaveBlend * 0.28;
-
-  threeCtx.headGroup.rotation.z = eng.smoothNeckComp;
-  threeCtx.headGroup.rotation.x =
-    -forwardLean * 0.7 - eng.smoothKneeFlex * 0.14 - eng.edgeSaveBlend * 0.2;
-
-  const leftLift = eng.leftPressed ? 0.28 : 0;
-  const rightLift =
-    eng.grappleRescueTimer > 0 ? 1.45 : eng.rightPressed ? 0.28 : 0;
-  const armSwing = stepSin * 0.12 * speedMult;
-  threeCtx.leftArm.shoulderGroup.rotation.x = -armSwing + pedalWave * 0.55;
-  threeCtx.rightArm.shoulderGroup.rotation.x =
-    eng.grappleRescueTimer > 0 ? -1.35 : armSwing - pedalWave * 0.55;
-  threeCtx.leftArm.shoulderGroup.rotation.z =
-    -eng.smoothTorsoComp * 0.4 - eng.edgeSaveBlend * 0.22;
-  threeCtx.rightArm.shoulderGroup.rotation.z =
-    -eng.smoothTorsoComp * 0.4 + eng.edgeSaveBlend * 0.22;
-
-  threeCtx.leftArm.elbowGroup.rotation.x = leftLift + eng.edgeSaveBlend * 0.25;
-  threeCtx.rightArm.elbowGroup.rotation.x = rightLift + eng.edgeSaveBlend * 0.25;
-
-  threeCtx.poleGroup.rotation.z =
-    (rightLift - leftLift) * 0.38 - angle * 0.42 + pedalWave * 0.14;
-
-  const windVal = eng.windCurrent || 0;
-  const ribbonFreq = 10.5 * Math.min(1.6, speedMult);
-  threeCtx.ribbonPivot.rotation.y =
-    -Math.PI * 0.5 + windVal * 0.78 + Math.sin(eng.time * ribbonFreq) * 0.22;
-  threeCtx.ribbonPivot.rotation.z = Math.cos(eng.time * (ribbonFreq * 1.15)) * 0.16;
-  threeCtx.ribbonJoint2.rotation.y =
-    Math.sin(eng.time * (ribbonFreq * 1.35) - 0.8) * 0.28 + windVal * 0.22;
-  threeCtx.ribbonJoint3.rotation.y =
-    Math.sin(eng.time * (ribbonFreq * 1.6) - 1.6) * 0.34 + windVal * 0.25;
-
-  threeCtx.backlitBackdrop.position.z = playerZ - 210;
-  threeCtx.arrivalGroup.position.set(0, 0, -eng.targetDistance - 3.5);
-  const pulse = 1 + Math.sin(eng.time * 5) * 0.08;
-  threeCtx.beaconRingMesh.scale.set(pulse, pulse, 1);
-
-  for (let i = 0; i < threeCtx.spotlightBeams.length; i++) {
-    const bObj = threeCtx.spotlightBeams[i];
-    bObj.mesh.rotation.z =
-      bObj.baseAngle + Math.sin(eng.time * bObj.speed + bObj.phaseOffset) * 0.14;
-    if (bObj.mesh.position.z > playerZ + 15) {
-      bObj.mesh.position.z -= 240;
-    } else if (bObj.mesh.position.z < playerZ - 235) {
-      bObj.mesh.position.z += 240;
-    }
-  }
-
-  for (let i = 0; i < threeCtx.skyscrapers.length; i++) {
-    const bMesh = threeCtx.skyscrapers[i];
-    if (bMesh.position.z > playerZ + 18) {
-      bMesh.position.z -= 286;
-    } else if (bMesh.position.z < playerZ - 268) {
-      bMesh.position.z += 286;
-    }
-  }
-
-  for (let i = 0; i < threeCtx.carMeshes.length; i++) {
-    const car = threeCtx.carMeshes[i];
-    car.mesh.position.z += car.speed * dt;
-    if (car.mesh.position.z > playerZ + 25) {
-      car.mesh.position.z = playerZ - 230;
-    } else if (car.mesh.position.z < playerZ - 235) {
-      car.mesh.position.z = playerZ + 20;
-    }
-  }
-
-  threeCtx.acrobatGroup.updateMatrixWorld(true);
-  threeCtx.leftArm.handMesh.getWorldPosition(threeCtx.worldLeftHand);
-  threeCtx.rightArm.handMesh.getWorldPosition(threeCtx.worldRightHand);
-
-  const lPos = threeCtx.worldLeftHand;
-  const rPos = threeCtx.worldRightHand;
-
-  // Renderizado del rayo láser cian 3D del Gancho Salvavidas desde la mano hasta el cable superior
-  if (eng.grappleRescueTimer > 0) {
-    threeCtx.grappleLaserLine.visible = true;
-    threeCtx.grappleBeamMesh.visible = true;
-    threeCtx.grappleAnchor.set(0, 0, playerZ - 1.2);
-
-    const gArr = threeCtx.grappleLineGeo.attributes.position.array;
-    gArr[0] = rPos.x;
-    gArr[1] = rPos.y;
-    gArr[2] = rPos.z;
-    gArr[3] = threeCtx.grappleAnchor.x;
-    gArr[4] = threeCtx.grappleAnchor.y;
-    gArr[5] = threeCtx.grappleAnchor.z;
-    threeCtx.grappleLineGeo.attributes.position.needsUpdate = true;
-
-    const dist = rPos.distanceTo(threeCtx.grappleAnchor);
-    threeCtx.grappleBeamMesh.position.lerpVectors(rPos, threeCtx.grappleAnchor, 0.5);
-    threeCtx.grappleBeamMesh.scale.set(1, Math.max(0.1, dist), 1);
-    threeCtx.grappleBeamMesh.lookAt(threeCtx.grappleAnchor);
-    threeCtx.grappleBeamMesh.rotateX(Math.PI / 2);
-  } else {
-    threeCtx.grappleLaserLine.visible = false;
-    threeCtx.grappleBeamMesh.visible = false;
-  }
-
-  // Posicionar Aros Receptores 3D en las manos y detectar ventana de captura
-  let leftReady = false;
-  let rightReady = false;
-  for (let i = 0; i < eng.jugglePool.length; i++) {
-    const b = eng.jugglePool[i];
-    if (b.active && b.phase >= eng.catchThreshold) {
-      if (b.targetHand === 'L') leftReady = true;
-      if (b.targetHand === 'R') rightReady = true;
-    }
-  }
-
-  threeCtx.leftReceiverRing.position.copy(lPos);
-  threeCtx.rightReceiverRing.position.copy(rPos);
-  threeCtx.leftReceiverMat.color.setHex(leftReady ? 0xfde047 : 0x00f2fe);
-  threeCtx.rightReceiverMat.color.setHex(rightReady ? 0xfde047 : 0x00f2fe);
-  const lScale = leftReady ? 1.32 : 0.78;
-  const rScale = rightReady ? 1.32 : 0.78;
-  threeCtx.leftReceiverRing.scale.set(lScale, lScale, lScale);
-  threeCtx.rightReceiverRing.scale.set(rScale, rScale, rScale);
-
-  // Parábola 3D de las Esferas Doradas Incandescentes con Estela de Luz
-  for (let i = 0; i < 4; i++) {
-    const b = eng.jugglePool[i];
-    const orbObj = threeCtx.orbMeshes[i];
-    if (!b.active || eng.fallSlowMo) {
-      orbObj.group.visible = false;
-      for (let tIdx = 0; tIdx < orbObj.trails.length; tIdx++) {
-        orbObj.trails[tIdx].visible = false;
-      }
-      continue;
-    }
-
-    orbObj.group.visible = true;
-    const fromHand = b.targetHand === 'R' ? lPos : rPos;
-    const toHand = b.targetHand === 'R' ? rPos : lPos;
-
-    const p = b.phase;
-    const arcPeakMeters = 1.48 + (i % 2) * 0.22;
-    const ox = fromHand.x + (toHand.x - fromHand.x) * p;
-    const oy =
-      fromHand.y + (toHand.y - fromHand.y) * p + 4 * arcPeakMeters * p * (1 - p);
-    const oz = fromHand.z + (toHand.z - fromHand.z) * p - 0.12 * Math.sin(p * Math.PI);
-
-    orbObj.group.position.set(ox, oy, oz);
-    const inCatch = p >= eng.catchThreshold;
-    const orbScale = inCatch ? 1.28 : isFever ? 1.15 : 1.0;
-    orbObj.group.scale.set(orbScale, orbScale, orbScale);
-
-    const trailSpacing = isFever ? 0.028 : 0.036;
-    for (let tIdx = 0; tIdx < orbObj.trails.length; tIdx++) {
-      const tMesh = orbObj.trails[tIdx];
-      const tp = p - (tIdx + 1) * trailSpacing;
-      if (tp <= 0.01) {
-        tMesh.visible = false;
-        continue;
-      }
-      tMesh.visible = true;
-      const tx = fromHand.x + (toHand.x - fromHand.x) * tp;
-      const ty =
-        fromHand.y +
-        (toHand.y - fromHand.y) * tp +
-        4 * arcPeakMeters * tp * (1 - tp);
-      const tz =
-        fromHand.z + (toHand.z - fromHand.z) * tp - 0.12 * Math.sin(tp * Math.PI);
-      tMesh.position.set(tx, ty, tz);
-    }
-  }
-
-  threeCtx.cyanPoleLight.position.set(0, 1.35, playerZ);
-  threeCtx.cyanPoleLight.intensity = isFever ? 6.8 : 3.8;
-  threeCtx.goldOrbLight.position.set(0, 2.45, playerZ - 0.25);
-
-  // Cámara con Zoom Dinámico de Adrenalina y seguimiento 3D durante la caída al vacío
-  const comboFactor = Math.min(1, (eng.combo || 0) / 14);
-  const dangerZone = Math.min(
-    1,
-    Math.max(0, (absAngle - CRITICAL_ANGLE_RAD * 0.28) / (CRITICAL_ANGLE_RAD * 0.62))
-  );
-  const tensionFactor = eng.fallSlowMo ? 1.0 : dangerZone;
-
-  const openFov = 58 + comboFactor * 6;
-  const targetFov = openFov * (1 - tensionFactor) + 48 * tensionFactor;
-
-  const openDistZ = 6.2 + comboFactor * 0.55;
-  const targetDistZ = openDistZ * (1 - tensionFactor) + 4.95 * tensionFactor;
-
-  const openCamY = 3.38 + comboFactor * 0.16;
-  const targetCamY = openCamY * (1 - tensionFactor) + 2.95 * tensionFactor;
-
-  const camLerp = Math.min(1, dt * 5.5);
-  eng.dynamicFov += (targetFov - eng.dynamicFov) * camLerp;
-  eng.dynamicCamDist += (targetDistZ - eng.dynamicCamDist) * camLerp;
-  eng.dynamicCamY += (targetCamY - eng.dynamicCamY) * camLerp;
-
-  if (Math.abs(threeCtx.camera.fov - eng.dynamicFov) > 0.02) {
-    threeCtx.camera.fov = eng.dynamicFov;
-    threeCtx.camera.updateProjectionMatrix();
-  }
-
-  const shakeX = eng.shake > 0.05 ? Math.sin(eng.time * 42) * eng.shake * 0.038 : 0;
-  const shakeY = eng.shake > 0.05 ? Math.cos(eng.time * 36) * eng.shake * 0.038 : 0;
-
-  threeCtx.camera.position.set(
-    shakeX + Math.sin(angle) * 0.32,
-    eng.dynamicCamY + shakeY,
-    playerZ + eng.dynamicCamDist
-  );
-
-  if (eng.fallSlowMo) {
-    threeCtx.camera.lookAt(threeCtx.acrobatGroup.position);
-  } else {
-    threeCtx.camera.lookAt(
-      eng.smoothHipX * 0.35,
-      1.65 - eng.smoothKneeFlex * 0.2,
-      playerZ - 15
-    );
-  }
-  threeCtx.camera.rotation.z = -eng.cameraRoll * (0.52 + tensionFactor * 0.65);
-
-  threeCtx.renderer.render(threeCtx.scene, threeCtx.camera);
-}
-
-// ============================================================================
-// PERFIL DEL JUGADOR Y POOLS PRE-ALOCADOS
-// ============================================================================
-function loadSavedProfile() {
+import {
+  COUNTRIES,
+  getCountryFlag,
+  getLiveLeaderboard,
+  syncPlayerScore,
+} from './leaderboardService';
+import {
+  CRITICAL_ANGLE_RAD,
+  buildThreeWorld,
+  updateAndRenderThreeScene,
+} from './threeEngine';
+
+function loadSavedData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -1305,402 +37,222 @@ function loadSavedProfile() {
   }
 }
 
-function createInitialPools(initialSpeed = 0.72) {
-  const jugglePool = [];
-  for (let i = 0; i < 4; i++) {
-    jugglePool.push({
-      id: i,
-      active: i === 0,
-      phase: i * 0.25,
-      speed: initialSpeed,
-      targetHand: i % 2 === 0 ? 'R' : 'L',
-      arcHeight: 132,
-      spinAngle: 0,
-    });
+function checkNeedsOnboarding() {
+  try {
+    const completed = localStorage.getItem('nma_profile_completed') === 'true';
+    const savedName = (localStorage.getItem('nma_player_name') || '').trim();
+    const savedCountry = (localStorage.getItem('nma_player_country') || '').trim();
+    if (
+      !completed ||
+      !savedName ||
+      savedName === 'TÚ (Equilibrista)' ||
+      savedName.length < 3 ||
+      !savedCountry
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
   }
-  return { jugglePool };
 }
 
 export default function App() {
-  const saved = loadSavedProfile();
-  const initialOnboarding = loadInitialOnboardingState(saved);
+  const saved = useRef(loadSavedData()).current;
+
+  const isEconomyV2Migrated = useRef(
+    (() => {
+      try {
+        return localStorage.getItem('nma_economy_v2_migrated') === 'true';
+      } catch {
+        return false;
+      }
+    })()
+  ).current;
 
   const [lang, setLang] = useState(saved?.lang || 'es');
-  const [soundOn, setSoundOn] = useState(saved?.soundOn ?? true);
-  const [currentLevel, setCurrentLevel] = useState(saved?.currentLevel || 1);
-  const [maxUnlockedLevel, setMaxUnlockedLevel] = useState(saved?.maxUnlockedLevel || 1);
-  const [coins, setCoins] = useState(saved?.coins ?? 450);
-  const [gems, setGems] = useState(saved?.gems ?? 80);
-  const [leaguePoints, setLeaguePoints] = useState(saved?.leaguePoints ?? 1250);
-
-  // Estados de Perfil de Jugador y Modal de Registro Inicial Obligatorio
-  const [playerId, setPlayerId] = useState(initialOnboarding.playerId);
-  const [playerName, setPlayerName] = useState(initialOnboarding.playerName);
-  const [playerCountry, setPlayerCountry] = useState(initialOnboarding.playerCountry || 'AR');
-  const [showOnboardingModal, setShowOnboardingModal] = useState(
-    initialOnboarding.needsOnboarding
+  const [level, setLevel] = useState(saved?.level || 1);
+  const [maxUnlockedCity, setMaxUnlockedCity] = useState(
+    saved?.maxUnlockedCity ?? Math.min(19, Math.floor(((saved?.level || 1) - 1) / 5))
   );
-  const [onboardingNameInput, setOnboardingNameInput] = useState(
-    initialOnboarding.playerName || ''
-  );
-  const [onboardingCountryInput, setOnboardingCountryInput] = useState(
-    initialOnboarding.playerCountry || 'AR'
-  );
-  const [onlineRegistry, setOnlineRegistry] = useState(() =>
-    loadOnlineLeaderboardRegistry()
-  );
+  const [coins, setCoins] = useState(saved?.coins ?? 1200);
+  const [gems, setGems] = useState(saved?.gems ?? 60);
+  const [bestScore, setBestScore] = useState(saved?.bestScore || 0);
+  const [leaguePoints, setLeaguePoints] = useState(saved?.leaguePoints ?? 320);
 
-  const [gearLevels, setGearLevels] = useState(
-    saved?.gearLevels || { pole: 1, boots: 1, gloves: 1 }
-  );
-
-  const [unlockedSkins, setUnlockedSkins] = useState(
-    saved?.unlockedSkins || ['skin_1']
-  );
-  const [equippedSkin, setEquippedSkin] = useState(
-    saved?.equippedSkin || 'skin_1'
-  );
-  const [unlockedProps, setUnlockedProps] = useState(saved?.unlockedProps || ['balls']);
-  const [equippedProp, setEquippedProp] = useState(saved?.equippedProp || 'balls');
-
-  const [activeTab, setActiveTab] = useState('home');
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [coverSrc, setCoverSrc] = useState('./icon.jpg');
-
-  const [gameStatus, setGameStatus] = useState('LOBBY');
-  const [activeModal, setActiveModal] = useState(null);
-  const [shopNotice, setShopNotice] = useState('');
-  const [seasonClock, setSeasonClock] = useState(() => getSeasonTimeRemaining());
-
-  // Estados efímeros de feedback visual flotante (Bloque 3)
-  const [handPopup, setHandPopup] = useState(null);
-  const [nearMissBanner, setNearMissBanner] = useState(0);
-
-  const [hudState, setHudState] = useState({
-    angleDeg: 0,
-    distance: 0,
-    targetDistance: 100,
-    walkSpeedMultiplier: 1.0,
-    juggleCount: 1,
-    multiplier: 1,
-    combo: 0,
-    isFeverMode: false,
-    windCurrent: 0,
-    windWarningActive: false,
-    fallSlowMo: false,
-    slowMoTimer: 1.25,
-    leftPressed: false,
-    rightPressed: false,
-    leftTimingReady: false,
-    rightTimingReady: false,
+  const [playerName, setPlayerName] = useState(() => {
+    try {
+      const nmaName = (localStorage.getItem('nma_player_name') || '').trim();
+      if (nmaName && nmaName !== 'TÚ (Equilibrista)') return nmaName;
+    } catch {
+      // ignore
+    }
+    const oldName = (saved?.playerName || '').trim();
+    if (oldName && oldName !== 'TÚ (Equilibrista)') return oldName;
+    return '';
   });
 
-  const mountRef = useRef(null);
-  const threeRef = useRef(null);
-  const needleRef = useRef(null);
-  const onboardingInputRef = useRef(null);
+  const [playerCountry, setPlayerCountry] = useState(() => {
+    try {
+      const nmaCountry = (localStorage.getItem('nma_player_country') || '').trim();
+      if (nmaCountry) return nmaCountry;
+    } catch {
+      // ignore
+    }
+    return saved?.playerCountry || 'AR';
+  });
+
+  const [showOnboardingModal, setShowOnboardingModal] = useState(() => checkNeedsOnboarding());
+  const [onboardingNameInput, setOnboardingNameInput] = useState(() => {
+    try {
+      const nmaName = (localStorage.getItem('nma_player_name') || '').trim();
+      if (nmaName && nmaName !== 'TÚ (Equilibrista)') return nmaName;
+    } catch {
+      // ignore
+    }
+    return '';
+  });
+  const [onboardingCountryInput, setOnboardingCountryInput] = useState(() => {
+    try {
+      const nmaCountry = (localStorage.getItem('nma_player_country') || '').trim();
+      if (nmaCountry) return nmaCountry;
+    } catch {
+      // ignore
+    }
+    return 'AR';
+  });
+  const [onboardingError, setOnboardingError] = useState(false);
+
+  // BLOQUE 1, 2, 3 y 4: Estados de Economía Pro, Pase VIP, Varas 3D, Multiplicadores y Ciudades VIP
+  const [vipPassActive, setVipPassActive] = useState(saved?.vipPassActive || false);
+  const [unlockedSkins, setUnlockedSkins] = useState(saved?.unlockedSkins || ['skin_1']);
+  const [equippedSkin, setEquippedSkin] = useState(saved?.equippedSkin || 'skin_1');
+  const [unlockedPoles, setUnlockedPoles] = useState(saved?.unlockedPoles || ['pole_basic']);
+  const [equippedPole, setEquippedPole] = useState(saved?.equippedPole || 'pole_basic');
+  const [ownedMultipliers, setOwnedMultipliers] = useState(saved?.ownedMultipliers || []);
+  const [unlockedVipCities, setUnlockedVipCities] = useState(saved?.unlockedVipCities || []);
+  const [activeVipCityId, setActiveVipCityId] = useState(saved?.activeVipCityId || null);
+  const [unlockedProps, setUnlockedProps] = useState(saved?.unlockedProps || ['balls']);
+  const [equippedProp, setEquippedProp] = useState(saved?.equippedProp || 'balls');
+  const [gearLevels, setGearLevels] = useState(() => {
+    if (!isEconomyV2Migrated) {
+      return { pole: 0, boots: 0, gloves: 0 };
+    }
+    return saved?.gearLevels || { pole: 0, boots: 0, gloves: 0 };
+  });
+  const [claimedTiers, setClaimedTiers] = useState(saved?.claimedTiers || []);
+  const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
+  const [armorySubTab, setArmorySubTab] = useState('upgrades');
+
+  const [activeTab, setActiveTab] = useState('home');
+  const [gameState, setGameState] = useState('menu'); // 'menu' | 'playing' | 'paused' | 'victory' | 'gameover'
+  const [showAdModal, setShowAdModal] = useState(null); // null | 'revive' | 'double' | 'gems' | 'coins'
+  const [adTimer, setAdTimer] = useState(2);
+  const [toastMsg, setToastMsg] = useState(null);
+  const [showCitySelectorModal, setShowCitySelectorModal] = useState(false);
+  const [liveLeaderboard, setLiveLeaderboard] = useState([]);
+  const [onlineSyncStatus, setOnlineSyncStatus] = useState('live');
+
+  const [hudData, setHudData] = useState({
+    progress: 0,
+    metersRemaining: 68,
+    totalMeters: 68,
+    score: 0,
+    combo: 0,
+    frenzyActive: false,
+    tiltRatio: 0,
+    windForce: 0,
+    juggleAlertHands: { left: false, right: false },
+    hookAvailable: true,
+    hookActive: false,
+    fallCinematicPhase: null,
+    floatingPopups: [],
+  });
+  const [runResult, setRunResult] = useState({
+    coinsEarned: 0,
+    scoreEarned: 0,
+    lpEarned: 0,
+    gemsEarned: 0,
+    doubled: false,
+    revivedOnce: false,
+  });
 
   const t = I18N[lang] || I18N.es;
-  const levelCfg = getLevelConfig(currentLevel);
-  const currentCity = levelCfg.city;
+  const activeVipCity = VIP_CITIES.find((vc) => vc.id === activeVipCityId) || null;
+  const cfg = getLevelConfig(level, activeVipCity);
   const currentSkinObj = SKINS.find((s) => s.id === equippedSkin) || SKINS[0];
+  const currentPoleObj = BALANCE_POLES.find((p) => p.id === equippedPole) || BALANCE_POLES[0];
   const currentPropObj = JUGGLE_PROPS.find((p) => p.id === equippedProp) || JUGGLE_PROPS[0];
 
-  const playerCountryObj = getCountryOption(playerCountry);
-  const playerFlag = playerCountryObj.flag;
-  const displayPlayerName = isValidPlayerName(playerName)
-    ? playerName
-    : t.youLabel;
+  // Multiplicadores combinados (Vara + Aspecto + Multiplicadores Permanentes + Ciudad VIP)
+  const permCoinMult = ownedMultipliers.reduce((acc, id) => {
+    const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
+    return m ? Math.max(acc, m.coinMult) : acc;
+  }, 1);
+  const permLpMult = ownedMultipliers.reduce((acc, id) => {
+    const m = PERMANENT_MULTIPLIERS.find((item) => item.id === id);
+    return m ? Math.max(acc, m.lpMult) : acc;
+  }, 1);
 
-  // Sincronización en tiempo real del perfil con el Ranking Online de la Liga de Temporada
-  const syncPlayerScore = useCallback(
-    (overrideProfile = {}) => {
-      try {
-        const finalId = overrideProfile.id || playerId || getOrCreatePlayerId();
-        const finalName = (overrideProfile.name ?? playerName ?? '').trim();
-        const finalCountry = overrideProfile.country || playerCountry || 'AR';
-        const finalLp =
-          typeof overrideProfile.lp === 'number' ? overrideProfile.lp : leaguePoints;
-        const finalMaxLvl =
-          typeof overrideProfile.level === 'number'
-            ? overrideProfile.level
-            : maxUnlockedLevel;
-
-        if (!isValidPlayerName(finalName)) return;
-
-        const countryInfo = getCountryOption(finalCountry);
-        const record = {
-          id: finalId,
-          name: finalName,
-          countryCode: countryInfo.code,
-          country: countryInfo.flag,
-          flag: countryInfo.flag,
-          lp: finalLp,
-          maxLevel: finalMaxLvl,
-          badge: '⭐',
-          updatedAt: Date.now(),
-        };
-
-        const currentList = loadOnlineLeaderboardRegistry();
-        const filtered = currentList.filter((item) => item && item.id !== finalId);
-        const updatedList = [...filtered, record];
-        localStorage.setItem(ONLINE_LEADERBOARD_KEY, JSON.stringify(updatedList));
-        setOnlineRegistry(updatedList);
-
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('nma_live_league_sync');
-          bc.postMessage({ type: 'PLAYER_SYNC', payload: record });
-          bc.close();
-        }
-      } catch {
-        // Ignorar errores de almacenamiento o canal en modo restringido
-      }
-    },
-    [playerId, playerName, playerCountry, leaguePoints, maxUnlockedLevel]
+  const vipCityMult = activeVipCity ? activeVipCity.rewardMult : 1;
+  const totalScoreMultiplier = Number(
+    (
+      currentPropObj.mult *
+      currentSkinObj.bonusMult *
+      currentPoleObj.scoreMult *
+      permLpMult *
+      vipCityMult
+    ).toFixed(2)
   );
-
-  // PASO 1: Detección de primer ingreso al montar `src/App.jsx`
-  useEffect(() => {
-    try {
-      const profileCompleted =
-        localStorage.getItem('nma_profile_completed') === 'true';
-      const storedName = localStorage.getItem('nma_player_name') || '';
-      const storedCountry = localStorage.getItem('nma_player_country') || 'AR';
-
-      if (!profileCompleted || !isValidPlayerName(storedName)) {
-        setShowOnboardingModal(true);
-      } else {
-        const uid = getOrCreatePlayerId();
-        setPlayerId(uid);
-        setPlayerName(storedName.trim());
-        setPlayerCountry(getCountryOption(storedCountry).code);
-        setShowOnboardingModal(false);
-        syncPlayerScore({
-          id: uid,
-          name: storedName.trim(),
-          country: getCountryOption(storedCountry).code,
-          lp: leaguePoints,
-          level: maxUnlockedLevel,
-        });
-      }
-    } catch {
-      setShowOnboardingModal(true);
-    }
-  }, []);
-
-  // Sincronizar automáticamente con la tabla online cada vez que el jugador gana LP o sube de nivel
-  useEffect(() => {
-    if (isValidPlayerName(playerName) && !showOnboardingModal) {
-      syncPlayerScore({
-        id: playerId,
-        name: playerName,
-        country: playerCountry,
-        lp: leaguePoints,
-        level: maxUnlockedLevel,
-      });
-    }
-  }, [leaguePoints, maxUnlockedLevel, playerName, playerCountry, playerId, showOnboardingModal, syncPlayerScore]);
-
-  // Escuchar actualizaciones en tiempo real entre pestañas si hubiera BroadcastChannel
-  useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') return undefined;
-    const bc = new BroadcastChannel('nma_live_league_sync');
-    bc.onmessage = () => {
-      setOnlineRegistry(loadOnlineLeaderboardRegistry());
-    };
-    return () => bc.close();
-  }, []);
-
-  // Foco automático en el input del modal de registro al abrirse
-  useEffect(() => {
-    if (showOnboardingModal && !isInitialLoading) {
-      const focusTimer = setTimeout(() => {
-        if (onboardingInputRef.current) {
-          onboardingInputRef.current.focus();
-        }
-      }, 80);
-      return () => clearTimeout(focusTimer);
-    }
-    return undefined;
-  }, [showOnboardingModal, isInitialLoading]);
-
-  const openProfileEditor = useCallback(() => {
-    soundEngine.init();
-    setOnboardingNameInput(isValidPlayerName(playerName) ? playerName : '');
-    setOnboardingCountryInput(playerCountry || 'AR');
-    setShowOnboardingModal(true);
-  }, [playerName, playerCountry]);
-
-  const nonSpaceOnboardingChars = onboardingNameInput.replace(/\s+/g, '').length;
-  const isOnboardingValid =
-    nonSpaceOnboardingChars >= 2 &&
-    onboardingNameInput.trim().length <= 16 &&
-    isValidPlayerName(onboardingNameInput);
-
-  const handleSaveOnboardingProfile = useCallback(
-    (e) => {
-      if (e && e.preventDefault) e.preventDefault();
-      if (!isOnboardingValid) return;
-
-      soundEngine.init();
-      const cleanName = onboardingNameInput.trim().slice(0, 16);
-      const countryOpt = getCountryOption(onboardingCountryInput || 'AR');
-      const uid = getOrCreatePlayerId();
-
-      try {
-        localStorage.setItem('nma_player_id', uid);
-        localStorage.setItem('nma_player_name', cleanName);
-        localStorage.setItem('nma_player_country', countryOpt.code);
-        localStorage.setItem('nma_profile_completed', 'true');
-      } catch {
-        // Ignorar cuota de localStorage
-      }
-
-      setPlayerId(uid);
-      setPlayerName(cleanName);
-      setPlayerCountry(countryOpt.code);
-      setShowOnboardingModal(false);
-
-      syncPlayerScore({
-        id: uid,
-        name: cleanName,
-        country: countryOpt.code,
-        lp: leaguePoints,
-        level: maxUnlockedLevel,
-      });
-
-      soundEngine.playVictory();
-    },
-    [
-      isOnboardingValid,
-      onboardingNameInput,
-      onboardingCountryInput,
-      leaguePoints,
-      maxUnlockedLevel,
-      syncPlayerScore,
-    ]
+  const totalCoinMultiplier = Number(
+    (
+      currentPropObj.mult *
+      (1 + (currentSkinObj.coinBonus || 0)) *
+      currentPoleObj.coinMult *
+      permCoinMult *
+      vipCityMult
+    ).toFixed(2)
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 550);
-    return () => clearTimeout(timer);
-  }, []);
+    soundEngine.enabled = soundEnabled;
+  }, [soundEnabled]);
 
-  const handleCoverImageError = useCallback(() => {
-    setCoverSrc((prev) => {
-      if (prev === './icon.jpg') return '/icon.jpg';
-      if (prev === '/icon.jpg') return './icon.png';
-      if (prev === './icon.png') return '/icon.png';
-      return prev;
-    });
-  }, []);
-
-  const engineRef = useRef(null);
-  if (!engineRef.current) {
-    const initialLvl = getLevelConfig(saved?.currentLevel || 1);
-    const pools = createInitialPools(initialLvl.juggleBaseSpeed);
-    const initSkin =
-      SKINS.find((s) => s.id === (saved?.equippedSkin || 'skin_1')) || SKINS[0];
-    const initProp =
-      JUGGLE_PROPS.find((p) => p.id === (saved?.equippedProp || 'balls')) ||
-      JUGGLE_PROPS[0];
-    const initGloves = saved?.gearLevels?.gloves || 1;
-
-    engineRef.current = {
-      lastTimestamp: 0,
-      time: 0,
-      hudSyncTimer: 0,
-      gameStatus: 'LOBBY',
-      paused: false,
-      cfg: initialLvl,
-      level: initialLvl.level,
-      cityIndex: initialLvl.cityIndex,
-      targetDistance: initialLvl.totalDistance,
-      distance: 0,
-      walkSpeedMultiplier: initialLvl.walkSpeedMultiplier,
-      walkSpeed: initialLvl.walkSpeed,
-      difficultyFactor: initialLvl.difficultyFactor,
-      catchWindow: initialLvl.catchWindow,
-      gravityFactor: initialLvl.gravityFactor,
-      windMax: initialLvl.windMax,
-      windChangeFreq: initialLvl.windChangeFreq,
-      windCurrent: 0.15,
-      windTarget: 0.25,
-      windTimer: 0,
-      windWarningActive: false,
-      nextWindSign: -1,
-      angle: 0.03,
-      angleRad: 0.03,
-      angleDeg: (0.03 * 180) / Math.PI,
-      cameraRoll: 0,
-      angularVelocity: 0,
-      stepPhase: 0,
-      smoothKneeFlex: 0,
-      smoothHipX: 0,
-      smoothTorsoComp: 0,
-      smoothNeckComp: 0,
-      edgeSaveBlend: 0,
-      dynamicFov: 58,
-      dynamicCamDist: 6.2,
-      dynamicCamY: 3.38,
-      fallSlowMo: false,
-      slowMoTimer: 1.25,
-      fallPosX: 0,
-      fallPosY: 0,
-      fallVelocityY: 0,
-      fallTumbleX: 0,
-      grappleRescueTimer: 0,
-      rescueStartX: 0,
-      rescueStartY: 0,
-      immunityTimer: 0,
-      criticalTiltDuration: 0,
-      nearMissArmed: false,
-      isFeverMode: false,
-      juggleCount: 1,
-      combo: 0,
-      maxCombo: 0,
-      catchesRun: 0,
-      coinsEarnedRun: 0,
-      lpEarnedRun: 0,
-      leftPressed: false,
-      rightPressed: false,
-      shake: 0,
-      grappleFlash: 0,
-      poleLevel: saved?.gearLevels?.pole || 1,
-      bootsLevel: saved?.gearLevels?.boots || 1,
-      glovesLevel: initGloves,
-      catchThreshold: Math.max(
-        0.62,
-        1.0 - initialLvl.catchWindow - (initGloves - 1) * 0.008
-      ),
-      skinObj: initSkin,
-      propObj: initProp,
-      ...pools,
-    };
-  }
+  useEffect(() => {
+    const highestFromLevel = Math.min(19, Math.floor((level - 1) / 5));
+    if (highestFromLevel > maxUnlockedCity) {
+      setMaxUnlockedCity(highestFromLevel);
+    }
+  }, [level, maxUnlockedCity]);
 
   useEffect(() => {
     try {
+      localStorage.setItem('nma_economy_v2_migrated', 'true');
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           lang,
-          soundOn,
-          playerId,
-          playerName,
-          playerCountry,
-          currentLevel,
-          maxUnlockedLevel,
+          level,
+          maxUnlockedCity: Math.max(maxUnlockedCity, Math.min(19, Math.floor((level - 1) / 5))),
           coins,
           gems,
+          bestScore,
           leaguePoints,
-          gearLevels,
+          playerName: playerName || 'Equilibrista',
+          playerCountry,
+          vipPassActive,
           unlockedSkins,
           equippedSkin,
+          unlockedPoles,
+          equippedPole,
+          ownedMultipliers,
+          unlockedVipCities,
+          activeVipCityId,
           unlockedProps,
           equippedProp,
+          gearLevels,
+          claimedTiers,
+          soundEnabled,
         })
       );
     } catch {
@@ -1708,1957 +260,2632 @@ export default function App() {
     }
   }, [
     lang,
-    soundOn,
-    playerId,
-    playerName,
-    playerCountry,
-    currentLevel,
-    maxUnlockedLevel,
+    level,
+    maxUnlockedCity,
     coins,
     gems,
+    bestScore,
     leaguePoints,
-    gearLevels,
+    playerName,
+    playerCountry,
+    vipPassActive,
     unlockedSkins,
     equippedSkin,
+    unlockedPoles,
+    equippedPole,
+    ownedMultipliers,
+    unlockedVipCities,
+    activeVipCityId,
     unlockedProps,
     equippedProp,
+    gearLevels,
+    claimedTiers,
+    soundEnabled,
   ]);
 
-  useEffect(() => {
-    soundEngine.enabled = soundOn;
-  }, [soundOn]);
-
-  useEffect(() => {
-    const eng = engineRef.current;
-    eng.poleLevel = gearLevels.pole || 1;
-    eng.bootsLevel = gearLevels.boots || 1;
-    eng.glovesLevel = gearLevels.gloves || 1;
-    const baseCatchWindow = eng.cfg?.catchWindow || 0.28;
-    eng.catchThreshold = Math.max(
-      0.62,
-      1.0 - baseCatchWindow - (eng.glovesLevel - 1) * 0.008
-    );
-    eng.skinObj = currentSkinObj;
-    eng.propObj = currentPropObj;
-  }, [gearLevels, currentCity, currentSkinObj, currentPropObj]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSeasonClock(getSeasonTimeRemaining());
-    }, 1000);
-    return () => clearInterval(interval);
+  const showToast = useCallback((msg) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg((prev) => (prev === msg ? null : prev));
+    }, 2600);
   }, []);
 
-  const resetEngineForLevel = useCallback(
-    (lvlNumber, nextStatus = 'LOBBY') => {
-      const cfg = getLevelConfig(lvlNumber);
-      const eng = engineRef.current;
-      eng.cfg = cfg;
-      eng.level = cfg.level;
-      eng.cityIndex = cfg.cityIndex;
-      eng.targetDistance = cfg.totalDistance;
-      eng.distance = 0;
-      eng.walkSpeedMultiplier = cfg.walkSpeedMultiplier;
-      eng.walkSpeed = cfg.walkSpeed;
-      eng.difficultyFactor = cfg.difficultyFactor;
-      eng.catchWindow = cfg.catchWindow;
-      eng.catchThreshold = Math.max(
-        0.62,
-        1.0 - cfg.catchWindow - (eng.glovesLevel - 1) * 0.008
-      );
-      eng.gravityFactor = cfg.gravityFactor;
-      eng.windMax = cfg.windMax;
-      eng.windChangeFreq = cfg.windChangeFreq;
-      eng.windCurrent = 0.15;
-      eng.windTarget = 0.32;
-      eng.windTimer = 0;
-      eng.windWarningActive = false;
-      eng.nextWindSign = -1;
-      eng.angle = 0.03;
-      eng.angleRad = 0.03;
-      eng.angleDeg = (0.03 * 180) / Math.PI;
-      eng.cameraRoll = 0;
-      eng.angularVelocity = 0;
-      eng.stepPhase = 0;
-      eng.smoothKneeFlex = 0;
-      eng.smoothHipX = 0;
-      eng.smoothTorsoComp = 0;
-      eng.smoothNeckComp = 0;
-      eng.edgeSaveBlend = 0;
-      eng.dynamicFov = 58;
-      eng.dynamicCamDist = 6.2;
-      eng.dynamicCamY = 3.38;
-      eng.fallSlowMo = false;
-      eng.slowMoTimer = 1.25;
-      eng.fallPosX = 0;
-      eng.fallPosY = 0;
-      eng.fallVelocityY = 0;
-      eng.fallTumbleX = 0;
-      eng.grappleRescueTimer = 0;
-      eng.rescueStartX = 0;
-      eng.rescueStartY = 0;
-      eng.immunityTimer = 0;
-      eng.criticalTiltDuration = 0;
-      eng.nearMissArmed = false;
-      eng.isFeverMode = false;
-      eng.juggleCount = 1;
-      eng.combo = 0;
-      eng.maxCombo = 0;
-      eng.catchesRun = 0;
-      eng.coinsEarnedRun = 0;
-      eng.lpEarnedRun = 0;
-      eng.leftPressed = false;
-      eng.rightPressed = false;
-      eng.shake = 0;
-      eng.grappleFlash = 0;
-      eng.gameStatus = nextStatus;
-      eng.paused = false;
+  const refreshOnlineStandings = useCallback(async () => {
+    const displayName = (playerName || 'Equilibrista').trim();
+    const list = await getLiveLeaderboard({
+      name: displayName,
+      country: playerCountry,
+      score: leaguePoints,
+      level,
+    });
+    setLiveLeaderboard(list);
+  }, [playerName, playerCountry, leaguePoints, level]);
 
-      for (let i = 0; i < eng.jugglePool.length; i++) {
-        const b = eng.jugglePool[i];
-        b.active = i === 0;
-        b.phase = i * 0.26;
-        b.speed = cfg.juggleBaseSpeed;
-        b.targetHand = i % 2 === 0 ? 'R' : 'L';
+  useEffect(() => {
+    refreshOnlineStandings();
+    const interval = setInterval(refreshOnlineStandings, 12000);
+    return () => clearInterval(interval);
+  }, [refreshOnlineStandings]);
+
+  const handleSaveOnboardingProfile = useCallback(
+    async (e) => {
+      if (e) e.preventDefault();
+      const cleanName = (onboardingNameInput || '').trim().slice(0, 15);
+      if (cleanName.length < 3 || cleanName === 'TÚ (Equilibrista)') {
+        setOnboardingError(true);
+        soundEngine.playMissAlert();
+        return;
       }
-
-      setGameStatus(nextStatus);
-      setActiveModal(null);
-      setHudState({
-        angleDeg: eng.angleDeg,
-        distance: 0,
-        targetDistance: cfg.totalDistance,
-        walkSpeedMultiplier: cfg.walkSpeedMultiplier,
-        juggleCount: 1,
-        multiplier: currentPropObj.mult * currentSkinObj.bonusMult,
-        combo: 0,
-        isFeverMode: false,
-        windCurrent: eng.windCurrent,
-        windWarningActive: false,
-        fallSlowMo: false,
-        slowMoTimer: 1.25,
-        leftPressed: false,
-        rightPressed: false,
-        leftTimingReady: false,
-        rightTimingReady: false,
+      const chosenCountry = onboardingCountryInput || 'AR';
+      setOnboardingError(false);
+      setPlayerName(cleanName);
+      setPlayerCountry(chosenCountry);
+      try {
+        localStorage.setItem('nma_player_name', cleanName);
+        localStorage.setItem('nma_player_country', chosenCountry);
+        localStorage.setItem('nma_profile_completed', 'true');
+      } catch {
+        // ignore storage errors
+      }
+      setShowOnboardingModal(false);
+      soundEngine.init();
+      soundEngine.playVictory();
+      showToast(
+        lang === 'es'
+          ? `✅ Perfil activo: ${getCountryFlag(chosenCountry)} ${cleanName}`
+          : `✅ Profile active: ${getCountryFlag(chosenCountry)} ${cleanName}`
+      );
+      setOnlineSyncStatus('syncing');
+      await syncPlayerScore(cleanName, chosenCountry, leaguePoints, level);
+      const updated = await getLiveLeaderboard({
+        name: cleanName,
+        country: chosenCountry,
+        score: leaguePoints,
+        level,
       });
+      setLiveLeaderboard(updated);
+      setOnlineSyncStatus('live');
     },
-    [currentPropObj.mult, currentSkinObj.bonusMult]
+    [onboardingNameInput, onboardingCountryInput, leaguePoints, level, lang, showToast]
   );
 
-  const startRun = useCallback(() => {
-    if (showOnboardingModal || !isValidPlayerName(playerName)) {
+  const openEditProfileModal = useCallback(() => {
+    setOnboardingNameInput(playerName || '');
+    setOnboardingCountryInput(playerCountry || 'AR');
+    setOnboardingError(false);
+    setShowOnboardingModal(true);
+  }, [playerName, playerCountry]);
+
+  // ============================================================================
+  // THREE.JS CONTAINER & PHYSICS ENGINE REFS
+  // ============================================================================
+  const mountRef = useRef(null);
+  const threeWorldRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const popupIdCounterRef = useRef(1);
+
+  const engineRef = useRef({
+    running: false,
+    angle: 0,
+    angularVel: 0,
+    distance: 0,
+    targetDistance: 68,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    frenzyActive: false,
+    windForce: 0,
+    windTarget: 0,
+    windTimer: 0,
+    walkCycle: 0,
+    lastStepPhase: 0,
+    controlInput: 0,
+    balls: [],
+    sparks: [],
+    floatingPopups: [],
+    hookAvailable: true,
+    hookActive: false,
+    hookTimer: 0,
+    freeFallShieldsRemaining: 0,
+    revivedOnce: false,
+    lastTimestamp: 0,
+    hudSyncTimer: 0,
+    nearMissCooldown: 0,
+    lightningFlashAlpha: 0,
+    fallSequence: {
+      active: false,
+      mode: null,
+      timer: 0,
+      fallY: 0,
+      fallVy: 0,
+      fallRotX: 0,
+      fallRotZ: 0,
+      ropeTopY: 16,
+      finalCoins: 0,
+      finalScore: 0,
+      finalLp: 0,
+      finalGems: 0,
+    },
+    cfg: null,
+    skinObj: null,
+    poleObj: null,
+    propObj: null,
+    gear: { pole: 0, boots: 0, gloves: 0 },
+  });
+
+  const pushFloatingPopup = useCallback((eng, text, color = '#00f2fe', subtext = '') => {
+    const id = popupIdCounterRef.current++;
+    eng.floatingPopups.push({
+      id,
+      text,
+      subtext,
+      color,
+      ttl: 1.05,
+    });
+    if (eng.floatingPopups.length > 4) {
+      eng.floatingPopups.shift();
+    }
+  }, []);
+
+  const createBallsForConfig = useCallback((levelCfg, propColor) => {
+    const count = levelCfg.ballCount;
+    const palette = [propColor, '#00f2fe', '#fde047', '#f43f5e', '#c084fc'];
+    const balls = [];
+    for (let i = 0; i < count; i++) {
+      const fromLeft = i % 2 === 0;
+      balls.push({
+        id: i,
+        fromLeft,
+        targetHand: fromLeft ? 'right' : 'left',
+        progress: (i / count) * 0.72,
+        speed: levelCfg.juggleSpeed * (0.95 + (i % 3) * 0.05),
+        color: palette[i % palette.length],
+        waitingCatch: false,
+      });
+    }
+    return balls;
+  }, []);
+
+  const initGameSession = useCallback(
+    (preserveProgress = false) => {
+      soundEngine.init();
+      const currentCfg = getLevelConfig(level, activeVipCity);
+      const eng = engineRef.current;
+
+      eng.cfg = currentCfg;
+      eng.skinObj = currentSkinObj;
+      eng.poleObj = currentPoleObj;
+      eng.propObj = currentPropObj;
+      eng.gear = { ...gearLevels };
+      eng.targetDistance = currentCfg.totalDistance;
+
+      if (!preserveProgress) {
+        eng.distance = 0;
+        eng.score = 0;
+        eng.combo = 0;
+        eng.maxCombo = 0;
+        eng.frenzyActive = false;
+        eng.hookAvailable = true;
+        eng.revivedOnce = false;
+        eng.floatingPopups = [];
+        const shieldFromPole = currentPoleObj.autoSaveFall ? 1 : 0;
+        const shieldFromSkin = currentSkinObj.freeShields || 0;
+        eng.freeFallShieldsRemaining = shieldFromPole + shieldFromSkin;
+      }
+
+      eng.angle = preserveProgress ? 0 : (Math.random() - 0.5) * 0.08;
+      eng.angularVel = 0;
+      eng.windForce = 0;
+      eng.windTarget = (Math.random() - 0.5) * currentCfg.windBase * 0.5;
+      eng.windTimer = 1.6;
+      eng.controlInput = 0;
+      eng.hookActive = false;
+      eng.hookTimer = 0;
+      eng.nearMissCooldown = 0;
+      eng.lightningFlashAlpha = 0;
+      eng.fallSequence = {
+        active: false,
+        mode: null,
+        timer: 0,
+        fallY: 0,
+        fallVy: 0,
+        fallRotX: 0,
+        fallRotZ: 0,
+        ropeTopY: 16,
+        finalCoins: 0,
+        finalScore: 0,
+        finalLp: 0,
+        finalGems: 0,
+      };
+      eng.balls = createBallsForConfig(currentCfg, currentPropObj.color);
+      eng.sparks = [];
+      eng.lastTimestamp = performance.now();
+      eng.running = true;
+
+      setHudData({
+        progress: Math.min(100, Math.floor((eng.distance / eng.targetDistance) * 100)),
+        metersRemaining: Math.max(0, Math.ceil(eng.targetDistance - eng.distance)),
+        totalMeters: eng.targetDistance,
+        score: Math.floor(eng.score),
+        combo: eng.combo,
+        frenzyActive: eng.frenzyActive,
+        tiltRatio: 0,
+        windForce: 0,
+        juggleAlertHands: { left: false, right: false },
+        hookAvailable: eng.hookAvailable,
+        hookActive: false,
+        fallCinematicPhase: null,
+        floatingPopups: [],
+      });
+    },
+    [
+      level,
+      activeVipCity,
+      currentSkinObj,
+      currentPoleObj,
+      currentPropObj,
+      gearLevels,
+      createBallsForConfig,
+    ]
+  );
+
+  const startPlay = () => {
+    if (checkNeedsOnboarding()) {
       setShowOnboardingModal(true);
       return;
     }
-    soundEngine.init();
-    soundEngine.playCatchSound(2, false);
-    resetEngineForLevel(currentLevel, 'PLAYING');
-  }, [currentLevel, resetEngineForLevel, showOnboardingModal, playerName]);
+    initGameSession(false);
+    setGameState('playing');
+  };
 
-  const handleAddJuggleObject = useCallback(() => {
-    soundEngine.init();
-    const eng = engineRef.current;
-    if (eng.gameStatus !== 'PLAYING' || eng.juggleCount >= 4) return;
+  const triggerPause = () => {
+    if (gameState === 'playing') {
+      engineRef.current.running = false;
+      soundEngine.updateWind(0);
+      setGameState('paused');
+    } else if (gameState === 'paused') {
+      engineRef.current.lastTimestamp = performance.now();
+      engineRef.current.running = true;
+      setGameState('playing');
+    }
+  };
 
-    const nextIdx = eng.juggleCount;
-    const item = eng.jugglePool[nextIdx];
-    item.active = true;
-    item.phase = 0.08;
-    item.speed = eng.cfg.juggleBaseSpeed;
-    item.targetHand = nextIdx % 2 === 0 ? 'R' : 'L';
-    eng.juggleCount += 1;
-
-    soundEngine.playCatchSound(eng.juggleCount + 2, true);
-  }, []);
-
-  const attemptHandCatch = useCallback(
-    (handChar) => {
+  const handleCatchHand = useCallback(
+    (hand) => {
       const eng = engineRef.current;
-      if (eng.gameStatus !== 'PLAYING' || eng.paused || eng.fallSlowMo) return false;
+      if (!eng.running || eng.fallSequence.active) return;
 
-      let caughtAny = false;
-      const threshold = eng.catchThreshold;
+      const gloveBonus = (eng.gear?.gloves || 0) * 0.015;
+      const poleCatchBonus = eng.poleObj?.catchRadiusBonus || 0;
+      const skinCatchBonus = eng.skinObj?.catchWindowBonus || 0;
+      const catchThreshold = Math.max(
+        0.5,
+        0.74 - (eng.cfg?.catchWindow || 0.24) - gloveBonus - (poleCatchBonus + skinCatchBonus) * 0.35
+      );
 
-      for (let i = 0; i < eng.jugglePool.length; i++) {
-        const obj = eng.jugglePool[i];
-        if (!obj.active) continue;
-        if (obj.targetHand === handChar && obj.phase >= threshold) {
-          const isPerfect = obj.phase >= 0.88;
-          obj.phase = 0;
-          obj.speed = eng.cfg.juggleBaseSpeed;
-          obj.targetHand = handChar === 'L' ? 'R' : 'L';
+      let caughtBall = null;
+      let bestProgress = -1;
 
-          eng.combo += 1;
-          if (eng.combo > eng.maxCombo) eng.maxCombo = eng.combo;
-          eng.catchesRun += 1;
-
-          // Bloque 3.2: Activar Modo Frenesí al llegar a Combo x10
-          eng.isFeverMode = eng.combo >= 10;
-
-          if (eng.level >= 4) {
-            const recoilSign = handChar === 'L' ? -1 : 1;
-            const catchRecoil =
-              recoilSign * 0.06 * (eng.difficultyFactor || eng.walkSpeedMultiplier);
-            eng.angularVelocity += catchRecoil;
-          } else {
-            eng.angularVelocity *= 0.82;
-            eng.angle *= 0.92;
-          }
-          eng.angleRad = eng.angle;
-          eng.angleDeg = (eng.angle * 180) / Math.PI;
-
-          // En Modo Frenesí la ganancia de monedas se multiplica x2
-          const feverCoinMult = eng.isFeverMode ? 2 : 1;
-          const totalMult =
-            eng.juggleCount *
-            (eng.propObj?.mult || 1) *
-            (eng.skinObj?.bonusMult || 1) *
-            feverCoinMult;
-          const coinGain = Math.max(1, Math.round((isPerfect ? 6 : 3) * totalMult));
-          const lpGain = Math.max(1, Math.round((isPerfect ? 4 : 2) * eng.juggleCount));
-
-          eng.coinsEarnedRun += coinGain;
-          eng.lpEarnedRun += lpGain;
-
-          setCoins((c) => c + coinGain);
-          setLeaguePoints((lp) => lp + lpGain);
-
-          if (eng.catchesRun % 8 === 0) {
-            setGems((g) => g + 1);
-          }
-
-          soundEngine.playCatchSound(eng.combo, isPerfect);
-
-          setHandPopup({
-            id: Date.now() + Math.random(),
-            side: handChar === 'L' ? 'left' : 'right',
-            isPerfect,
-            text: `${
-              isPerfect
-                ? (I18N[lang] || I18N.es).perfectCatchLabel
-                : (I18N[lang] || I18N.es).goodCatchLabel
-            } x${eng.combo}`,
-          });
-
-          caughtAny = true;
-          break;
+      for (const b of eng.balls) {
+        if (b.targetHand === hand && b.progress >= catchThreshold && b.progress > bestProgress) {
+          bestProgress = b.progress;
+          caughtBall = b;
         }
       }
-      return caughtAny;
-    },
-    [lang]
-  );
 
-  // Bloque 2.2: Rescate Físico 3D con el Gancho Salvavidas + 1.5s de inmunidad estabilizada
-  const handleGrappleSave = useCallback(() => {
-    soundEngine.init();
-    const eng = engineRef.current;
-    if (eng.gameStatus !== 'PLAYING' && eng.gameStatus !== 'GAMEOVER') return;
+      if (caughtBall) {
+        const wasPerfect = caughtBall.progress >= 0.85 && caughtBall.progress <= 0.96;
+        caughtBall.fromLeft = hand === 'left';
+        caughtBall.targetHand = hand === 'left' ? 'right' : 'left';
+        caughtBall.progress = 0.02;
+        caughtBall.waitingCatch = false;
 
-    if (gems < 20) {
-      setActiveModal('SHOP');
-      eng.paused = true;
-      return;
-    }
+        eng.combo += 1;
+        if (eng.combo > eng.maxCombo) eng.maxCombo = eng.combo;
 
-    setGems((g) => g - 20);
-    eng.rescueStartX = eng.fallSlowMo ? eng.fallPosX : Math.sin(eng.angle) * 0.5;
-    eng.rescueStartY = eng.fallSlowMo ? Math.min(-0.8, eng.fallPosY) : -0.6;
-    eng.grappleRescueTimer = 0.45;
-    eng.immunityTimer = 1.5;
+        const wasFrenzy = eng.frenzyActive;
+        eng.frenzyActive = eng.combo >= 10;
 
-    eng.angle = 0;
-    eng.angleRad = 0;
-    eng.angleDeg = 0;
-    eng.angularVelocity = 0;
-    eng.fallSlowMo = false;
-    eng.slowMoTimer = 1.25;
-    eng.fallPosX = 0;
-    eng.fallPosY = 0;
-    eng.fallVelocityY = 0;
-    eng.fallTumbleX = 0;
-    eng.grappleFlash = 1.0;
-    eng.shake = 0;
-    eng.gameStatus = 'PLAYING';
-    setGameStatus('PLAYING');
+        if (!wasFrenzy && eng.frenzyActive) {
+          soundEngine.playFrenzyStart();
+          pushFloatingPopup(
+            eng,
+            lang === 'es' ? '🔥 ¡MODO FRENESÍ x2!' : '🔥 FRENZY MODE x2!',
+            '#fde047',
+            lang === 'es' ? 'COMBO x10 ALCANZADO' : 'COMBO x10 REACHED'
+          );
+        } else {
+          soundEngine.playCatch(eng.combo, eng.frenzyActive);
+          if (wasPerfect) {
+            pushFloatingPopup(
+              eng,
+              lang === 'es' ? `⚡ ¡PERFECTO! x${eng.combo}` : `⚡ PERFECT! x${eng.combo}`,
+              eng.frenzyActive ? '#fde047' : '#00f2fe'
+            );
+          }
+        }
 
-    soundEngine.playGrapple();
-  }, [gems]);
+        const frenzyBonus = eng.frenzyActive ? 2 : 1;
+        eng.score += Math.round((28 + eng.combo * 9) * totalScoreMultiplier * frenzyBonus);
 
-  const handleThumbDown = useCallback(
-    (side, e) => {
-      if (e && e.cancelable) e.preventDefault();
-      soundEngine.init();
-      const eng = engineRef.current;
-      if (side === 'L') {
-        eng.leftPressed = true;
-        attemptHandCatch('L');
+        // Retroceso lateral al atrapar (anulado si equipa Barra Gravitatoria Imperial)
+        if (!eng.poleObj?.noCatchRecoil) {
+          const catchRecoil = eng.cfg?.catchRecoilImpulse ?? 0.05;
+          eng.angularVel += (hand === 'left' ? -1 : 1) * catchRecoil;
+        }
+
+        for (let s = 0; s < 10; s++) {
+          eng.sparks.push({
+            hand,
+            x: (Math.random() - 0.5) * 0.25,
+            y: (Math.random() - 0.5) * 0.25,
+            vx: (Math.random() - 0.5) * 3.8,
+            vy: 0.9 + Math.random() * 2.8,
+            vz: (Math.random() - 0.5) * 2.8,
+            ttl: 0.42,
+            color: eng.frenzyActive ? '#fde047' : caughtBall.color,
+          });
+        }
       } else {
-        eng.rightPressed = true;
-        attemptHandCatch('R');
+        eng.angularVel += (hand === 'left' ? -0.16 : 0.16);
+        eng.combo = 0;
+        eng.frenzyActive = false;
+        soundEngine.playMissAlert();
       }
     },
-    [attemptHandCatch]
+    [totalScoreMultiplier, lang, pushFloatingPopup]
   );
 
-  const handleThumbUp = useCallback((side, e) => {
-    if (e && e.cancelable) e.preventDefault();
+  const activateLifelineHook = useCallback(() => {
     const eng = engineRef.current;
-    if (side === 'L') {
-      eng.leftPressed = false;
-    } else {
-      eng.rightPressed = false;
-    }
-  }, []);
+    if (!eng.running || !eng.hookAvailable || eng.fallSequence.active) return;
+    eng.hookAvailable = false;
+    eng.hookActive = true;
+    eng.hookTimer = 2.6;
+    eng.angle *= 0.15;
+    eng.angularVel = 0;
+    soundEngine.playHookRescue();
+    pushFloatingPopup(
+      eng,
+      lang === 'es' ? '🪝 ¡GANCHO SALVAVIDAS!' : '🪝 LIFELINE HOOK!',
+      '#4ade80',
+      lang === 'es' ? 'ESTABILIDAD RESTAURADA' : 'STABILITY RESTORED'
+    );
+    showToast(lang === 'es' ? '🪝 ¡Gancho Salvavidas Activado!' : '🪝 Lifeline Hook Activated!');
+  }, [lang, showToast, pushFloatingPopup]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
-      // No interceptar teclas cuando el usuario está escribiendo su Nombre/Apodo en el modal
-      if (
-        showOnboardingModal ||
-        e.target?.tagName === 'INPUT' ||
-        e.target?.tagName === 'TEXTAREA'
-      ) {
-        return;
-      }
-      if (e.repeat) return;
-      const key = e.key.toLowerCase();
       const eng = engineRef.current;
-
-      if (key === 'arrowleft' || key === 'a') {
-        eng.leftPressed = true;
-        attemptHandCatch('L');
-      } else if (key === 'arrowright' || key === 'd') {
-        eng.rightPressed = true;
-        attemptHandCatch('R');
-      } else if (key === 'w' || key === 'arrowup') {
-        handleAddJuggleObject();
-      } else if (key === ' ') {
+      if (gameState !== 'playing' || !eng.running) return;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        eng.controlInput = -1;
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        eng.controlInput = 1;
+      } else if (e.key === 'q' || e.key === 'Q') {
+        handleCatchHand('left');
+      } else if (e.key === 'e' || e.key === 'E') {
+        handleCatchHand('right');
+      } else if (e.key === ' ') {
         e.preventDefault();
-        if (eng.gameStatus === 'LOBBY') {
-          startRun();
-        } else if (eng.gameStatus === 'PLAYING') {
-          handleGrappleSave();
-        }
-      } else if (key === 'escape' || key === 'p') {
-        if (eng.gameStatus === 'PLAYING') {
-          eng.paused = !eng.paused;
-          setActiveModal(eng.paused ? 'PAUSE' : null);
-        }
+        activateLifelineHook();
+      } else if (e.key === 'Escape') {
+        triggerPause();
       }
     };
-
     const onKeyUp = (e) => {
-      if (
-        showOnboardingModal ||
-        e.target?.tagName === 'INPUT' ||
-        e.target?.tagName === 'TEXTAREA'
-      ) {
-        return;
-      }
-      const key = e.key.toLowerCase();
       const eng = engineRef.current;
-      if (key === 'arrowleft' || key === 'a') {
-        eng.leftPressed = false;
-      } else if (key === 'arrowright' || key === 'd') {
-        eng.rightPressed = false;
+      if (
+        (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') &&
+        eng.controlInput < 0
+      ) {
+        eng.controlInput = 0;
+      }
+      if (
+        (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') &&
+        eng.controlInput > 0
+      ) {
+        eng.controlInput = 0;
       }
     };
-
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [
-    showOnboardingModal,
-    attemptHandCatch,
-    handleAddJuggleObject,
-    handleGrappleSave,
-    startRun,
-  ]);
+  }, [gameState, handleCatchHand, activateLifelineHook]);
 
   // ============================================================================
-  // BUCLE PRINCIPAL 60/90/120Hz DE FÍSICA DELTATIME + RENDERIZADO 3D THREE.JS
+  // THREE.JS INITIALIZATION & RESIZE HANDLER
   // ============================================================================
   useEffect(() => {
-    if (!mountRef.current) return undefined;
+    const container = mountRef.current;
+    if (!container) return;
 
-    const threeCtx = buildThreeWorld(mountRef.current);
-    threeRef.current = threeCtx;
-
-    let rafId = null;
+    const world = buildThreeWorld(container);
+    threeWorldRef.current = world;
 
     const handleResize = () => {
-      if (!mountRef.current || !threeRef.current) return;
-      const w = mountRef.current.clientWidth || 420;
-      const h = mountRef.current.clientHeight || 780;
-      threeRef.current.camera.aspect = w / h;
-      threeRef.current.camera.updateProjectionMatrix();
-      threeRef.current.renderer.setSize(w, h);
+      if (!container || !threeWorldRef.current) return;
+      const w = container.clientWidth || 390;
+      const h = container.clientHeight || 844;
+      threeWorldRef.current.camera.aspect = w / h;
+      threeWorldRef.current.camera.updateProjectionMatrix();
+      threeWorldRef.current.renderer.setSize(w, h);
     };
 
     window.addEventListener('resize', handleResize);
-
-    const tick = (timestamp) => {
-      const eng = engineRef.current;
-      const rawDt = (timestamp - eng.lastTimestamp) / 1000;
-      const dt = rawDt > 0 && rawDt < 0.2 ? Math.min(rawDt, 0.05) : 0.0166;
-      eng.lastTimestamp = timestamp;
-
-      if (!eng.paused) {
-        eng.time += dt;
-        eng.cameraRoll += (eng.angle * 0.24 - eng.cameraRoll) * Math.min(1, dt * 8);
-
-        if (eng.grappleFlash > 0) {
-          eng.grappleFlash = Math.max(0, eng.grappleFlash - dt * 2.4);
-        }
-        if (eng.grappleRescueTimer > 0) {
-          eng.grappleRescueTimer = Math.max(0, eng.grappleRescueTimer - dt);
-        }
-        if (eng.immunityTimer > 0) {
-          eng.immunityTimer = Math.max(0, eng.immunityTimer - dt);
-        }
-        if (eng.shake > 0) {
-          eng.shake = Math.max(0, eng.shake - dt * 4.5);
-        }
-
-        if (eng.gameStatus === 'PLAYING') {
-          if (eng.fallSlowMo) {
-            eng.slowMoTimer -= dt;
-            eng.fallVelocityY -= 16.8 * dt;
-            eng.fallPosY += eng.fallVelocityY * dt;
-            eng.fallPosX += (eng.angle >= 0 ? 1 : -1) * 2.4 * dt;
-            eng.fallTumbleX += dt * 2.8;
-            eng.angle += (eng.angle >= 0 ? 1 : -1) * 0.35 * dt;
-            eng.angleRad = eng.angle;
-            eng.angleDeg = (eng.angle * 180) / Math.PI;
-
-            if (eng.slowMoTimer <= 0) {
-              eng.fallSlowMo = false;
-              eng.gameStatus = 'GAMEOVER';
-              setGameStatus('GAMEOVER');
-            }
-          } else {
-            eng.windTimer += dt;
-            if (eng.level >= 4 && eng.windTimer >= eng.windChangeFreq - 1.0) {
-              if (!eng.windWarningActive) {
-                eng.windWarningActive = true;
-                eng.nextWindSign = eng.windTarget >= 0 ? -1 : 1;
-              }
-            }
-
-            if (eng.windTimer >= eng.windChangeFreq) {
-              eng.windTimer = 0;
-              eng.windWarningActive = false;
-              if (eng.level >= 4) {
-                const gustSign = eng.nextWindSign || (eng.windTarget >= 0 ? -1 : 1);
-                const gustMag =
-                  (0.36 + Math.abs(Math.cos(eng.time * 2.3)) * eng.windMax * 0.58) *
-                  Math.pow(eng.walkSpeedMultiplier, 0.45);
-                eng.windTarget = gustSign * gustMag;
-                eng.shake = 1.9;
-                soundEngine.playWindGust();
-              } else {
-                const sign = Math.sin(eng.time * 3.7) >= 0 ? 1 : -1;
-                eng.windTarget =
-                  sign * (0.16 + Math.abs(Math.cos(eng.time * 2.3)) * eng.windMax * 0.36);
-              }
-            }
-            eng.windCurrent += (eng.windTarget - eng.windCurrent) * Math.min(1, dt * 2.2);
-
-            const cfg = eng.cfg;
-            const poleFactor = 1 - (eng.poleLevel - 1) * 0.048;
-            const shoesFactor = 1 - (eng.bootsLevel - 1) * 0.052;
-            const thumbPower = 4.55 + (eng.poleLevel - 1) * 0.15;
-
-            const speedBonus = 1 + (eng.bootsLevel - 1) * 0.025;
-            const stepAdvance = eng.walkSpeed * speedBonus * dt;
-            eng.distance = Math.min(eng.targetDistance, eng.distance + stepAdvance);
-            eng.stepPhase += dt * 7.2 * eng.walkSpeedMultiplier * speedBonus;
-
-            const stepSway =
-              Math.sin(eng.stepPhase) *
-              0.45 *
-              Math.pow(eng.walkSpeedMultiplier, 1.35) *
-              shoesFactor;
-
-            const inputDir = (eng.rightPressed ? 1 : 0) - (eng.leftPressed ? 1 : 0);
-            const thumbTorque = inputDir * thumbPower;
-
-            const gravityTorque =
-              Math.sin(eng.angle) * cfg.gravityInstability * 2.55 * poleFactor;
-            const windTorque = eng.windCurrent * shoesFactor * 1.65;
-
-            if (eng.immunityTimer > 0) {
-              eng.angularVelocity = 0;
-              eng.angle *= Math.pow(0.82, dt * 60);
-            } else {
-              eng.angularVelocity +=
-                (gravityTorque + windTorque + stepSway + thumbTorque) * dt;
-              const dampingBase = eng.isFeverMode ? 0.905 : 0.92;
-              eng.angularVelocity *= Math.pow(dampingBase, dt * 60);
-              eng.angle += eng.angularVelocity * dt;
-            }
-            eng.angleRad = eng.angle;
-            eng.angleDeg = (eng.angle * 180) / Math.PI;
-
-            const absAngle = Math.abs(eng.angle);
-
-            if (absAngle > CRITICAL_ANGLE_RAD * 0.75) {
-              soundEngine.playHeartbeatIfDanger(timestamp);
-            }
-
-            if (absAngle > CRITICAL_ANGLE_RAD * 0.78) {
-              eng.criticalTiltDuration += dt;
-              if (eng.criticalTiltDuration >= 0.35) {
-                eng.nearMissArmed = true;
-              }
-            } else if (absAngle < CRITICAL_ANGLE_RAD * 0.3) {
-              if (eng.nearMissArmed) {
-                eng.nearMissArmed = false;
-                eng.criticalTiltDuration = 0;
-                eng.coinsEarnedRun += 5;
-                eng.lpEarnedRun += 100;
-                setCoins((c) => c + 5);
-                setLeaguePoints((lp) => lp + 100);
-                soundEngine.playNearMissSave();
-                setNearMissBanner(Date.now());
-              } else {
-                eng.criticalTiltDuration = 0;
-              }
-            }
-
-            for (let i = 0; i < eng.jugglePool.length; i++) {
-              const ball = eng.jugglePool[i];
-              if (!ball.active) continue;
-
-              ball.phase += ball.speed * dt;
-              ball.spinAngle = ball.phase * Math.PI * 4;
-
-              if (ball.phase >= eng.catchThreshold) {
-                if (
-                  (ball.targetHand === 'L' && eng.leftPressed) ||
-                  (ball.targetHand === 'R' && eng.rightPressed)
-                ) {
-                  attemptHandCatch(ball.targetHand);
-                  continue;
-                }
-              }
-
-              if (ball.phase >= 1.0) {
-                ball.phase = 0;
-                const missDir = ball.targetHand === 'L' ? -1 : 1;
-                ball.targetHand = ball.targetHand === 'L' ? 'R' : 'L';
-                eng.combo = 0;
-                eng.isFeverMode = false;
-                const missRecoil =
-                  eng.level >= 4
-                    ? missDir * (0.68 + 0.06 * (eng.difficultyFactor || 1)) * poleFactor
-                    : missDir * 0.65 * poleFactor;
-                if (eng.immunityTimer <= 0) {
-                  eng.angularVelocity += missRecoil;
-                }
-                eng.shake = 2.8;
-              }
-            }
-
-            if (absAngle >= CRITICAL_ANGLE_RAD && eng.immunityTimer <= 0) {
-              eng.fallSlowMo = true;
-              eng.slowMoTimer = 1.25;
-              eng.fallPosX = Math.sin(eng.angle) * 0.35;
-              eng.fallPosY = -0.08;
-              eng.fallVelocityY = -2.4;
-              eng.fallTumbleX = 0.15;
-              eng.isFeverMode = false;
-              eng.shake = 4.0;
-              soundEngine.playFall();
-            }
-
-            if (eng.distance >= eng.targetDistance) {
-              eng.gameStatus = 'VICTORY';
-              const clearBonusCoins = 120 + eng.level * 25;
-              const clearBonusGems = eng.level % 5 === 0 ? 18 : 6;
-              const clearBonusLP = 45 + eng.level * 8;
-
-              eng.coinsEarnedRun += clearBonusCoins;
-              eng.lpEarnedRun += clearBonusLP;
-
-              setCoins((c) => c + clearBonusCoins);
-              setGems((g) => g + clearBonusGems);
-              setLeaguePoints((lp) => lp + clearBonusLP);
-              setMaxUnlockedLevel((m) => Math.max(m, Math.min(100, eng.level + 1)));
-
-              soundEngine.playVictory();
-              setGameStatus('VICTORY');
-            }
-          }
-        } else if (eng.gameStatus === 'LOBBY') {
-          eng.angle = Math.sin(eng.time * 1.5) * 0.04;
-          eng.angleRad = eng.angle;
-          eng.angleDeg = (eng.angle * 180) / Math.PI;
-          eng.windCurrent = Math.sin(eng.time * 0.8) * 0.35;
-          for (let i = 0; i < eng.jugglePool.length; i++) {
-            const ball = eng.jugglePool[i];
-            if (!ball.active) continue;
-            ball.phase = (ball.phase + dt * 0.65) % 1;
-          }
-        }
-      }
-
-      if (needleRef.current) {
-        const clampedDeg = Math.max(-47, Math.min(47, eng.angleDeg || 0));
-        const offsetPx = (clampedDeg / 47) * 90;
-        needleRef.current.style.transform = `translateX(${offsetPx.toFixed(1)}px)`;
-      }
-
-      updateAndRenderThreeScene(threeRef.current, eng, dt);
-
-      eng.hudSyncTimer += dt;
-      if (eng.hudSyncTimer >= 0.08) {
-        eng.hudSyncTimer = 0;
-        let leftReady = false;
-        let rightReady = false;
-        for (let i = 0; i < eng.jugglePool.length; i++) {
-          const b = eng.jugglePool[i];
-          if (b.active && b.phase >= eng.catchThreshold) {
-            if (b.targetHand === 'L') leftReady = true;
-            if (b.targetHand === 'R') rightReady = true;
-          }
-        }
-
-        const feverMult = eng.isFeverMode ? 2 : 1;
-        const totalMult =
-          eng.juggleCount *
-          (eng.propObj?.mult || 1) *
-          (eng.skinObj?.bonusMult || 1) *
-          feverMult;
-
-        setHudState({
-          angleDeg: eng.angleDeg || 0,
-          distance: Math.floor(eng.distance),
-          targetDistance: eng.targetDistance,
-          walkSpeedMultiplier: eng.walkSpeedMultiplier || 1.0,
-          juggleCount: eng.juggleCount,
-          multiplier: totalMult,
-          combo: eng.combo,
-          isFeverMode: eng.isFeverMode,
-          windCurrent: eng.windCurrent,
-          windWarningActive: eng.windWarningActive,
-          fallSlowMo: eng.fallSlowMo,
-          slowMoTimer: eng.slowMoTimer,
-          leftPressed: eng.leftPressed,
-          rightPressed: eng.rightPressed,
-          leftTimingReady: leftReady,
-          rightTimingReady: rightReady,
-        });
-      }
-
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (rafId) cancelAnimationFrame(rafId);
-      if (threeRef.current && threeRef.current.renderer) {
-        threeRef.current.renderer.dispose();
+      soundEngine.updateWind(0);
+      if (world && world.renderer && world.renderer.domElement) {
+        if (container.contains(world.renderer.domElement)) {
+          container.removeChild(world.renderer.domElement);
+        }
+        world.renderer.dispose();
       }
     };
-  }, [attemptHandCatch]);
+  }, []);
 
-  const handleUpgradeGear = (item) => {
-    soundEngine.init();
-    const curLvl = gearLevels[item.id] || 1;
-    if (curLvl >= item.maxLevel) return;
-    const cost = Math.round(item.baseCost * Math.pow(item.costScale, curLvl - 1));
-    if (coins < cost) return;
+  // ============================================================================
+  // MAIN GAME LOOP (PHYSICS + THREE.JS RENDER)
+  // ============================================================================
+  useEffect(() => {
+    const eng = engineRef.current;
+    if (!eng.cfg) {
+      eng.cfg = cfg;
+      eng.skinObj = currentSkinObj;
+      eng.poleObj = currentPoleObj;
+      eng.propObj = currentPropObj;
+      eng.gear = { ...gearLevels };
+      eng.targetDistance = cfg.totalDistance;
+      eng.balls = createBallsForConfig(cfg, currentPropObj.color);
+    } else {
+      eng.skinObj = currentSkinObj;
+      eng.poleObj = currentPoleObj;
+      eng.propObj = currentPropObj;
+      eng.gear = { ...gearLevels };
+      if (!eng.running && gameState === 'menu') {
+        eng.cfg = cfg;
+        eng.targetDistance = cfg.totalDistance;
+      }
+    }
 
-    setCoins((c) => c - cost);
-    setGearLevels((prev) => ({ ...prev, [item.id]: curLvl + 1 }));
-    soundEngine.playCatchSound(curLvl + 3, true);
+    const tick = (now) => {
+      const dt = Math.min(0.05, Math.max(0.001, (now - (eng.lastTimestamp || now)) / 1000));
+      eng.lastTimestamp = now;
+
+      if (eng.floatingPopups.length > 0) {
+        for (let i = eng.floatingPopups.length - 1; i >= 0; i--) {
+          eng.floatingPopups[i].ttl -= dt;
+          if (eng.floatingPopups[i].ttl <= 0) {
+            eng.floatingPopups.splice(i, 1);
+          }
+        }
+      }
+
+      if (eng.lightningFlashAlpha > 0) {
+        eng.lightningFlashAlpha = Math.max(0, eng.lightningFlashAlpha - dt * 2.4);
+      }
+
+      if (eng.running && gameState === 'playing') {
+        const lCfg = eng.cfg;
+
+        if (eng.fallSequence.active) {
+          eng.fallSequence.timer += dt;
+          soundEngine.updateWind(0);
+
+          if (eng.fallSequence.mode === 'hook_rescue') {
+            if (eng.fallSequence.timer < 0.58) {
+              eng.fallSequence.fallVy -= 24 * dt;
+              eng.fallSequence.fallY += eng.fallSequence.fallVy * dt;
+              eng.fallSequence.fallRotX += 2.2 * dt;
+              eng.fallSequence.fallRotZ += (eng.angle >= 0 ? 1 : -1) * 2.5 * dt;
+              eng.fallSequence.ropeTopY = Math.max(
+                eng.fallSequence.fallY + 1.8,
+                16 - eng.fallSequence.timer * 28
+              );
+            } else if (eng.fallSequence.timer < 1.38) {
+              const pullT = (eng.fallSequence.timer - 0.58) / 0.8;
+              eng.fallSequence.fallY = THREE_LERP(eng.fallSequence.fallY, 0, pullT * 0.25);
+              eng.fallSequence.fallRotX = THREE_LERP(eng.fallSequence.fallRotX, 0, pullT * 0.3);
+              eng.fallSequence.fallRotZ = THREE_LERP(eng.fallSequence.fallRotZ, 0, pullT * 0.3);
+              eng.fallSequence.ropeTopY = eng.fallSequence.fallY + 2.2 + pullT * 10;
+            } else {
+              eng.fallSequence.active = false;
+              eng.fallSequence.mode = null;
+              eng.fallSequence.fallY = 0;
+              eng.fallSequence.fallRotX = 0;
+              eng.fallSequence.fallRotZ = 0;
+              eng.angle = 0;
+              eng.angularVel = 0;
+              eng.hookActive = true;
+              eng.hookTimer = 2.0;
+              pushFloatingPopup(
+                eng,
+                lang === 'es' ? '🪝 ¡RESCATE EN EL AIRE!' : '🪝 MID-AIR HOOK RESCUE!',
+                '#4ade80',
+                lang === 'es' ? 'DEVUELTO AL CABLE' : 'PULLED BACK TO CABLE'
+              );
+            }
+          } else if (eng.fallSequence.mode === 'gameover_fall') {
+            eng.fallSequence.fallVy -= 28 * dt;
+            eng.fallSequence.fallY += eng.fallSequence.fallVy * dt;
+            eng.fallSequence.fallRotX += 3.4 * dt;
+            eng.fallSequence.fallRotZ += (eng.angle >= 0 ? 1 : -1) * 4.2 * dt;
+
+            if (eng.fallSequence.timer >= 1.5) {
+              eng.running = false;
+              setRunResult({
+                coinsEarned: eng.fallSequence.finalCoins,
+                scoreEarned: eng.fallSequence.finalScore,
+                lpEarned: eng.fallSequence.finalLp,
+                gemsEarned: 0,
+                doubled: false,
+                revivedOnce: eng.revivedOnce,
+              });
+              setCoins((c) => c + eng.fallSequence.finalCoins);
+              setLeaguePoints((lp) => {
+                const nextLp = lp + eng.fallSequence.finalLp;
+                syncPlayerScore(playerName || 'Equilibrista', playerCountry, nextLp, level);
+                return nextLp;
+              });
+              setBestScore((b) => Math.max(b, eng.fallSequence.finalScore));
+              setGameState('gameover');
+            }
+          }
+        } else {
+          // 1. Reducciones y Bonificaciones de Armería + Vara 3D + Aspecto
+          const armoryPoleBonus = Math.min(0.45, (eng.gear.pole || 0) * 0.048);
+          const poleGravityRed = eng.poleObj?.gravityReduction || 0;
+          const totalGravityFactor = Math.max(0.22, (1 - armoryPoleBonus) * (1 - poleGravityRed));
+
+          const armoryBootBonus = Math.min(0.48, (eng.gear.boots || 0) * 0.052);
+          const skinWindRed = eng.skinObj?.windReduction || 0;
+          const totalWindFactor = Math.max(0.2, (1 - armoryBootBonus) * (1 - skinWindRed));
+
+          const totalStepDampFactor = Math.max(
+            0.25,
+            1 - Math.min(0.75, (eng.poleObj?.stepDamp || 0) + (eng.skinObj?.stepDampBonus || 0))
+          );
+
+          // 2. Viento y Ráfagas
+          eng.windTimer -= dt;
+          if (eng.windTimer <= 0) {
+            const gustChangeInterval = lCfg.gustInterval ?? 1.8;
+            eng.windTimer = gustChangeInterval * (0.75 + Math.random() * 0.45);
+            const reverseSign =
+              Math.abs(eng.windTarget) > 0.05 && Math.random() < 0.72
+                ? -Math.sign(eng.windTarget)
+                : Math.random() < 0.5
+                ? -1
+                : 1;
+            const rawGust = (0.45 + Math.random() * 0.65) * lCfg.windBase * reverseSign;
+            eng.windTarget = rawGust * totalWindFactor;
+
+            if (
+              lCfg.city?.weatherArchetype === 'cyber_rain' &&
+              Math.abs(rawGust) > 0.7 &&
+              Math.random() < 0.45
+            ) {
+              eng.lightningFlashAlpha = 0.85;
+            }
+          }
+          eng.windForce += (eng.windTarget - eng.windForce) * dt * 2.8;
+          soundEngine.updateWind(eng.windForce);
+
+          if (eng.hookActive) {
+            eng.hookTimer -= dt;
+            if (eng.hookTimer <= 0) eng.hookActive = false;
+          }
+
+          // 3. Avance e impacto de pisada amortiguado por Vara + Aspecto
+          const prevWalkCycle = eng.walkCycle;
+          const walkCycleRate = 3.2 * lCfg.walkSpeed;
+          eng.walkCycle += dt * walkCycleRate;
+
+          const prevStepIndex = Math.floor(prevWalkCycle / Math.PI);
+          const currStepIndex = Math.floor(eng.walkCycle / Math.PI);
+          if (currStepIndex !== prevStepIndex) {
+            const footSign = currStepIndex % 2 === 0 ? 1 : -1;
+            const stepImpulse = (lCfg.stepSwayImpulse ?? 0.04) * totalStepDampFactor;
+            eng.angularVel += footSign * stepImpulse * (eng.hookActive ? 0.25 : 1);
+            soundEngine.playFootstep(lCfg.walkSpeed);
+          }
+
+          // 4. Física de Péndulo Invertido
+          const gravityTorque =
+            Math.sin(eng.angle) * lCfg.gravity * totalGravityFactor * (eng.hookActive ? 0.25 : 1);
+          const windTorque = eng.windForce * 0.78 * (eng.hookActive ? 0.2 : 1);
+          const playerTorque = eng.controlInput * 3.15;
+          const microTurbulence =
+            Math.sin(now * 0.0047) *
+            0.12 *
+            lCfg.walkSpeed *
+            totalStepDampFactor *
+            (eng.hookActive ? 0.2 : 1);
+
+          eng.angularVel += (gravityTorque + windTorque + playerTorque + microTurbulence) * dt;
+          eng.angularVel *= Math.pow(0.88, dt * 60);
+          eng.angle += eng.angularVel * dt;
+
+          if (eng.hookActive) {
+            eng.angle *= Math.pow(0.86, dt * 60);
+          }
+
+          // 5. Salvada al Límite (Near-Miss)
+          if (eng.nearMissCooldown > 0) eng.nearMissCooldown -= dt;
+          const absRatio = Math.abs(eng.angle) / CRITICAL_ANGLE_RAD;
+          if (
+            absRatio >= 0.78 &&
+            absRatio < 0.98 &&
+            eng.nearMissCooldown <= 0 &&
+            eng.angle * eng.controlInput < 0 &&
+            Math.abs(eng.controlInput) > 0.1
+          ) {
+            eng.nearMissCooldown = 2.4;
+            const nearBonus = Math.round(150 * totalScoreMultiplier * (eng.frenzyActive ? 2 : 1));
+            eng.score += nearBonus;
+            soundEngine.playNearMiss();
+            pushFloatingPopup(
+              eng,
+              lang === 'es' ? `⚡ ¡SALVADA AL LÍMITE! +${nearBonus}` : `⚡ NEAR-MISS SAVE! +${nearBonus}`,
+              '#38bdf8',
+              lang === 'es' ? 'RECUPERACIÓN EXTREMA' : 'EXTREME RECOVERY'
+            );
+          }
+
+          // 6. Avance hacia la meta
+          const stabilityBonus = Math.max(
+            0.35,
+            1 - Math.abs(eng.angle) / (CRITICAL_ANGLE_RAD * 1.15)
+          );
+          const forwardMetersPerSec = 4.6 * lCfg.walkSpeed * (0.72 + stabilityBonus * 0.38);
+          eng.distance += forwardMetersPerSec * dt;
+          eng.score +=
+            forwardMetersPerSec * dt * 12 * totalScoreMultiplier * (eng.frenzyActive ? 2 : 1);
+
+          // 7. Vuelo de esferas de malabares
+          const alertHands = { left: false, right: false };
+          const gloveBonus = (eng.gear?.gloves || 0) * 0.015;
+          const poleCatchBonus = eng.poleObj?.catchRadiusBonus || 0;
+          const skinCatchBonus = eng.skinObj?.catchWindowBonus || 0;
+          const catchThreshold = Math.max(
+            0.5,
+            0.74 - lCfg.catchWindow - gloveBonus - (poleCatchBonus + skinCatchBonus) * 0.35
+          );
+
+          for (const b of eng.balls) {
+            b.progress += b.speed * dt;
+            if (b.progress >= catchThreshold && b.progress <= 1.02) {
+              alertHands[b.targetHand] = true;
+              b.waitingCatch = true;
+            } else {
+              b.waitingCatch = false;
+            }
+
+            if (b.progress > 1.03) {
+              b.fromLeft = b.targetHand === 'left';
+              b.targetHand = b.fromLeft ? 'right' : 'left';
+              b.progress = 0.0;
+              b.waitingCatch = false;
+              eng.combo = 0;
+              eng.frenzyActive = false;
+              const dropPenalty = 0.24 + (lCfg.speedPhase || 0) * 0.04;
+              eng.angularVel += (b.targetHand === 'left' ? -dropPenalty : dropPenalty);
+              soundEngine.playMissAlert();
+              pushFloatingPopup(
+                eng,
+                lang === 'es' ? '⚠️ ¡ESFERA PERDIDA!' : '⚠️ DROPPED ORB!',
+                '#ef4444'
+              );
+            }
+          }
+
+          // 8. Chispas 3D
+          for (let i = eng.sparks.length - 1; i >= 0; i--) {
+            const sp = eng.sparks[i];
+            sp.ttl -= dt;
+            if (sp.ttl <= 0) {
+              eng.sparks.splice(i, 1);
+            } else {
+              sp.x += sp.vx * dt;
+              sp.y += sp.vy * dt;
+              sp.vy -= 5.5 * dt;
+            }
+          }
+
+          // 9. Chequeo de Caída Crítica (Escudo Anti-Caída Imperial/Leyenda -> Gancho -> Caída al Vacío)
+          if (Math.abs(eng.angle) >= CRITICAL_ANGLE_RAD) {
+            if (eng.freeFallShieldsRemaining > 0) {
+              eng.freeFallShieldsRemaining -= 1;
+              eng.angle *= 0.12;
+              eng.angularVel = 0;
+              eng.hookActive = true;
+              eng.hookTimer = 2.2;
+              soundEngine.playHookRescue();
+              pushFloatingPopup(
+                eng,
+                lang === 'es'
+                  ? '🛡️ ¡ESCUDO ANTI-CAÍDA ACTIVADO!'
+                  : '🛡️ ANTI-FALL SHIELD ACTIVATED!',
+                '#fde047',
+                lang === 'es' ? 'PROTECCIÓN PRO / VIP' : 'PRO / VIP PROTECTION'
+              );
+            } else if (eng.hookAvailable) {
+              eng.hookAvailable = false;
+              eng.fallSequence.active = true;
+              eng.fallSequence.mode = 'hook_rescue';
+              eng.fallSequence.timer = 0;
+              eng.fallSequence.fallY = 0;
+              eng.fallSequence.fallVy = -3.8;
+              eng.fallSequence.fallRotX = 0.18;
+              eng.fallSequence.fallRotZ = eng.angle * 0.8;
+              eng.fallSequence.ropeTopY = 16;
+              soundEngine.playFallScream();
+              setTimeout(() => soundEngine.playHookRescue(), 460);
+              pushFloatingPopup(
+                eng,
+                lang === 'es' ? '🪝 ¡GANCHO SALVAVIDAS!' : '🪝 LIFELINE HOOK!',
+                '#4ade80'
+              );
+            } else {
+              const finalScore = Math.floor(eng.score);
+              const finalCoins = Math.max(
+                15,
+                Math.floor((eng.distance * 1.4 + eng.maxCombo * 6) * totalCoinMultiplier)
+              );
+              const finalLp = Math.max(
+                10,
+                Math.floor((eng.distance * 0.8 + eng.maxCombo * 4) * permLpMult * vipCityMult)
+              );
+
+              eng.fallSequence.active = true;
+              eng.fallSequence.mode = 'gameover_fall';
+              eng.fallSequence.timer = 0;
+              eng.fallSequence.fallY = 0;
+              eng.fallSequence.fallVy = -4.5;
+              eng.fallSequence.fallRotX = 0.25;
+              eng.fallSequence.fallRotZ = eng.angle;
+              eng.fallSequence.finalCoins = finalCoins;
+              eng.fallSequence.finalScore = finalScore;
+              eng.fallSequence.finalLp = finalLp;
+              soundEngine.updateWind(0);
+              soundEngine.playFallScream();
+            }
+          } else if (eng.distance >= eng.targetDistance) {
+            // 10. Victoria al cruzar la azotea
+            eng.running = false;
+            soundEngine.updateWind(0);
+            soundEngine.playVictory();
+            const finalScore = Math.floor(eng.score + 500 * totalScoreMultiplier);
+            const finalCoins = Math.floor(
+              (125 + level * 26 + eng.maxCombo * 12) * totalCoinMultiplier
+            );
+            const finalLp = Math.floor(
+              (95 + level * 16 + eng.maxCombo * 9) * permLpMult * vipCityMult
+            );
+            const finalGems = (activeVipCity ? activeVipCity.gemBonus : 0) + (level % 5 === 0 ? 12 : 4);
+
+            setRunResult({
+              coinsEarned: finalCoins,
+              scoreEarned: finalScore,
+              lpEarned: finalLp,
+              gemsEarned: finalGems,
+              doubled: false,
+              revivedOnce: eng.revivedOnce,
+            });
+            setCoins((c) => c + finalCoins);
+            setGems((g) => g + finalGems);
+            setLeaguePoints((lp) => {
+              const nextLp = lp + finalLp;
+              syncPlayerScore(playerName || 'Equilibrista', playerCountry, nextLp, level + 1);
+              return nextLp;
+            });
+            setBestScore((b) => Math.max(b, finalScore));
+            setMaxUnlockedCity((prev) => Math.max(prev, Math.min(19, Math.floor(level / 5))));
+            setGameState('victory');
+            return;
+          }
+
+          eng.hudSyncTimer += dt;
+          if (eng.hudSyncTimer >= 0.07) {
+            eng.hudSyncTimer = 0;
+            setHudData({
+              progress: Math.min(100, Math.floor((eng.distance / eng.targetDistance) * 100)),
+              metersRemaining: Math.max(0, Math.ceil(eng.targetDistance - eng.distance)),
+              totalMeters: eng.targetDistance,
+              score: Math.floor(eng.score),
+              combo: eng.combo,
+              frenzyActive: eng.frenzyActive,
+              tiltRatio: Math.max(-1, Math.min(1, eng.angle / CRITICAL_ANGLE_RAD)),
+              windForce: eng.windForce,
+              juggleAlertHands: alertHands,
+              hookAvailable: eng.hookAvailable,
+              hookActive: eng.hookActive,
+              fallCinematicPhase: eng.fallSequence.mode,
+              floatingPopups: [...eng.floatingPopups],
+            });
+          }
+        }
+
+        if (eng.fallSequence.active) {
+          eng.hudSyncTimer += dt;
+          if (eng.hudSyncTimer >= 0.07) {
+            eng.hudSyncTimer = 0;
+            setHudData((prev) => ({
+              ...prev,
+              fallCinematicPhase: eng.fallSequence.mode,
+              floatingPopups: [...eng.floatingPopups],
+            }));
+          }
+        }
+      } else {
+        eng.walkCycle += dt * 1.4;
+      }
+
+      if (threeWorldRef.current) {
+        updateAndRenderThreeScene(threeWorldRef.current, eng, now * 0.001, gameState);
+      }
+
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [
+    gameState,
+    cfg,
+    currentSkinObj,
+    currentPoleObj,
+    currentPropObj,
+    gearLevels,
+    totalScoreMultiplier,
+    totalCoinMultiplier,
+    permLpMult,
+    vipCityMult,
+    activeVipCity,
+    level,
+    lang,
+    playerName,
+    playerCountry,
+    createBallsForConfig,
+    pushFloatingPopup,
+  ]);
+
+  function THREE_LERP(a, b, t) {
+    return a + (b - a) * Math.max(0, Math.min(1, t));
+  }
+
+  // ============================================================================
+  // REWARDED ADS & MONETIZATION ACTIONS
+  // ============================================================================
+  useEffect(() => {
+    if (!showAdModal) return;
+    setAdTimer(2);
+    const interval = setInterval(() => {
+      setAdTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showAdModal]);
+
+  const completeAdReward = () => {
+    const mode = showAdModal;
+    setShowAdModal(null);
+
+    if (mode === 'revive') {
+      const eng = engineRef.current;
+      eng.revivedOnce = true;
+      eng.hookAvailable = true;
+      initGameSession(true);
+      setGameState('playing');
+      showToast(lang === 'es' ? '⚡ ¡Segunda oportunidad activada!' : '⚡ Second chance activated!');
+    } else if (mode === 'double') {
+      if (!runResult.doubled) {
+        setCoins((c) => c + runResult.coinsEarned);
+        setLeaguePoints((lp) => {
+          const nextLp = lp + runResult.lpEarned;
+          syncPlayerScore(playerName || 'Equilibrista', playerCountry, nextLp, level);
+          return nextLp;
+        });
+        setRunResult((prev) => ({
+          ...prev,
+          coinsEarned: prev.coinsEarned * 2,
+          lpEarned: prev.lpEarned * 2,
+          doubled: true,
+        }));
+        showToast(lang === 'es' ? '🎬 ¡Recompensas Duplicadas x2!' : '🎬 Rewards Doubled x2!');
+      }
+    } else if (mode === 'gems') {
+      setGems((g) => g + 35);
+      showToast(lang === 'es' ? '💎 +35 Gemas Gratis acreditadas' : '💎 +35 Free Gems credited');
+    } else if (mode === 'coins') {
+      setCoins((c) => c + 1500);
+      showToast(
+        lang === 'es' ? '🪙 +1.500 Monedas Gratis acreditadas' : '🪙 +1,500 Free Coins credited'
+      );
+    }
   };
 
-  const handleSkinAction = (skin) => {
-    soundEngine.init();
-    if (unlockedSkins.includes(skin.id)) {
-      setEquippedSkin(skin.id);
-      soundEngine.playCatchSound(2, false);
+  const handleNextLevel = () => {
+    const nextLvl = level + 1;
+    setLevel(nextLvl);
+    setMaxUnlockedCity((prev) => Math.max(prev, Math.min(19, Math.floor((nextLvl - 1) / 5))));
+    setTimeout(() => {
+      const eng = engineRef.current;
+      const nextCfg = getLevelConfig(nextLvl, activeVipCity);
+      eng.cfg = nextCfg;
+      eng.targetDistance = nextCfg.totalDistance;
+      eng.distance = 0;
+      eng.score = 0;
+      eng.combo = 0;
+      eng.maxCombo = 0;
+      eng.frenzyActive = false;
+      eng.angle = 0;
+      eng.angularVel = 0;
+      eng.hookAvailable = true;
+      eng.hookActive = false;
+      eng.revivedOnce = false;
+      const shieldFromPole = currentPoleObj.autoSaveFall ? 1 : 0;
+      const shieldFromSkin = currentSkinObj.freeShields || 0;
+      eng.freeFallShieldsRemaining = shieldFromPole + shieldFromSkin;
+      eng.fallSequence.active = false;
+      eng.fallSequence.mode = null;
+      eng.balls = createBallsForConfig(nextCfg, currentPropObj.color);
+      eng.lastTimestamp = performance.now();
+      eng.running = true;
+      setGameState('playing');
+    }, 30);
+  };
+
+  // ============================================================================
+  // BLOQUE 1: UPGRADE DE ARMERÍA (CURVA EXPONENCIAL NV 1-5 + CORTE PRO NV 6-10)
+  // ============================================================================
+  const handleUpgradeGear = (gearItem) => {
+    const curLvl = gearLevels[gearItem.id] || 0;
+    const costInfo = getArmoryUpgradeCost(curLvl);
+    if (costInfo.isMax) return;
+
+    if (!costInfo.isProTier) {
+      // Niveles 1 a 5 (monedas del juego: 850 -> 2083 -> 5102 -> 12500 -> 30626)
+      if (coins < costInfo.coinCost) {
+        showToast(
+          lang === 'es'
+            ? `🪙 Necesitás ${costInfo.coinCost.toLocaleString()} Monedas`
+            : `🪙 Need ${costInfo.coinCost.toLocaleString()} Coins`
+        );
+        return;
+      }
+      setCoins((c) => c - costInfo.coinCost);
+      setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
+      soundEngine.playCatch(curLvl + 2, false);
+      showToast(
+        `${gearItem.icon} ${gearItem.name[lang]} Nv.${curLvl + 1}/10!`
+      );
+    } else {
+      // Niveles 6 a 10: Tramo Élite / Dinero Real (Gemas o Pase VIP Pro)
+      if (vipPassActive) {
+        setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
+        soundEngine.playVictory();
+        showToast(
+          `👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10 (Pase VIP)!`
+        );
+        return;
+      }
+      if (gems >= costInfo.gemCost) {
+        setGems((g) => g - costInfo.gemCost);
+        setGearLevels((prev) => ({ ...prev, [gearItem.id]: curLvl + 1 }));
+        soundEngine.playVictory();
+        showToast(
+          `👑 ${gearItem.name[lang]} Élite Nv.${curLvl + 1}/10!`
+        );
+      } else {
+        setActiveTab('store');
+        showToast(
+          lang === 'es'
+            ? `👑 Nivel Élite (6-10): Requiere ${costInfo.gemCost} Gemas o Pase VIP Pro`
+            : `👑 Elite Tier (6-10): Requires ${costInfo.gemCost} Gems or VIP Pro Pass`
+        );
+      }
+    }
+  };
+
+  // ============================================================================
+  // BLOQUE 2: COMPRA / EQUIPAMIENTO DE VARAS DE EQUILIBRIO 3D
+  // ============================================================================
+  const handleSelectOrBuyPole = (pole) => {
+    if (unlockedPoles.includes(pole.id) || (pole.isVipOnly && vipPassActive)) {
+      if (!unlockedPoles.includes(pole.id)) {
+        setUnlockedPoles((prev) => [...prev, pole.id]);
+      }
+      setEquippedPole(pole.id);
+      soundEngine.playCatch(4, false);
+      showToast(`${pole.icon} ${pole.name[lang]} ${t.equipped}`);
       return;
     }
-    if (skin.currency === 'coins' && coins >= skin.cost) {
-      setCoins((c) => c - skin.cost);
-      setUnlockedSkins((u) => [...u, skin.id]);
-      setEquippedSkin(skin.id);
-      soundEngine.playVictory();
-    } else if (skin.currency === 'gems' && gems >= skin.cost) {
-      setGems((g) => g - skin.cost);
-      setUnlockedSkins((u) => [...u, skin.id]);
-      setEquippedSkin(skin.id);
-      soundEngine.playVictory();
+
+    if (pole.currency === 'coins') {
+      if (coins >= pole.cost) {
+        setCoins((c) => c - pole.cost);
+        setUnlockedPoles((prev) => [...prev, pole.id]);
+        setEquippedPole(pole.id);
+        soundEngine.playVictory();
+        showToast(`${pole.icon} ${pole.name[lang]}!`);
+      } else {
+        showToast(
+          lang === 'es'
+            ? `🪙 Necesitás ${pole.cost.toLocaleString()} Monedas`
+            : `🪙 Need ${pole.cost.toLocaleString()} Coins`
+        );
+      }
+    } else {
+      if (gems >= pole.gemCost) {
+        setGems((g) => g - pole.gemCost);
+        setUnlockedPoles((prev) => [...prev, pole.id]);
+        setEquippedPole(pole.id);
+        soundEngine.playVictory();
+        showToast(`👑 ${pole.name[lang]} Desbloqueada!`);
+      } else {
+        setActiveTab('store');
+        showToast(
+          lang === 'es'
+            ? `👑 Vara Exclusiva (${pole.usdPrice || `${pole.gemCost} 💎`}): Visitá la Tienda VIP`
+            : `👑 Exclusive Pole (${pole.usdPrice || `${pole.gemCost} 💎`}): Visit VIP Store`
+        );
+      }
     }
   };
 
-  const handlePropAction = (prop) => {
-    soundEngine.init();
+  // ============================================================================
+  // BLOQUE 3: COMPRA DE ASPECTOS CON BENEFICIOS Y MULTIPLICADORES PERMANENTES
+  // ============================================================================
+  const handleSelectOrBuySkin = (skin) => {
+    if (unlockedSkins.includes(skin.id) || (skin.isVipOnly && vipPassActive)) {
+      if (!unlockedSkins.includes(skin.id)) {
+        setUnlockedSkins((prev) => [...prev, skin.id]);
+      }
+      setEquippedSkin(skin.id);
+      soundEngine.playCatch(3, false);
+      showToast(`${skin.icon} ${skin.name[lang]} ${t.equipped}`);
+      return;
+    }
+
+    if (skin.currency === 'coins') {
+      if (coins >= skin.cost) {
+        setCoins((c) => c - skin.cost);
+        setUnlockedSkins((prev) => [...prev, skin.id]);
+        setEquippedSkin(skin.id);
+        soundEngine.playVictory();
+        showToast(`${skin.icon} ${skin.name[lang]}!`);
+      } else {
+        showToast(
+          lang === 'es'
+            ? `🪙 Necesitás ${skin.cost.toLocaleString()} Monedas`
+            : `🪙 Need ${skin.cost.toLocaleString()} Coins`
+        );
+      }
+    } else {
+      if (gems >= skin.gemCost) {
+        setGems((g) => g - skin.gemCost);
+        setUnlockedSkins((prev) => [...prev, skin.id]);
+        setEquippedSkin(skin.id);
+        soundEngine.playVictory();
+        showToast(`👑 ${skin.name[lang]} Desbloqueado!`);
+      } else {
+        setActiveTab('store');
+        showToast(
+          lang === 'es'
+            ? `👑 Aspecto Pro (${skin.usdPrice || `${skin.gemCost} 💎`}): Disponible en Tienda VIP`
+            : `👑 Pro Skin (${skin.usdPrice || `${skin.gemCost} 💎`}): Available in VIP Store`
+        );
+      }
+    }
+  };
+
+  const handleBuyPermanentMultiplier = (multItem) => {
+    if (ownedMultipliers.includes(multItem.id)) {
+      showToast(lang === 'es' ? '✅ Multiplicador ya activo' : '✅ Multiplier already active');
+      return;
+    }
+    if (multItem.isVipOnly && vipPassActive) {
+      setOwnedMultipliers((prev) => [...prev, multItem.id]);
+      soundEngine.playVictory();
+      showToast(`👑 ${multItem.name[lang]} Activado!`);
+      return;
+    }
+    if (multItem.currency === 'coins') {
+      if (coins >= multItem.cost) {
+        setCoins((c) => c - multItem.cost);
+        setOwnedMultipliers((prev) => [...prev, multItem.id]);
+        soundEngine.playVictory();
+        showToast(`🚀 ${multItem.name[lang]} Activado!`);
+      } else {
+        showToast(
+          lang === 'es'
+            ? `🪙 Necesitás ${multItem.cost.toLocaleString()} Monedas`
+            : `🪙 Need ${multItem.cost.toLocaleString()} Coins`
+        );
+      }
+    } else {
+      if (gems >= multItem.gemCost) {
+        setGems((g) => g - multItem.gemCost);
+        setOwnedMultipliers((prev) => [...prev, multItem.id]);
+        soundEngine.playVictory();
+        showToast(`👑 ${multItem.name[lang]} Activado!`);
+      } else {
+        setActiveTab('store');
+        showToast(
+          lang === 'es'
+            ? `👑 Multiplicador Pro (${multItem.usdPrice}): Requiere ${multItem.gemCost} 💎 o Pase VIP`
+            : `👑 Pro Multiplier (${multItem.usdPrice}): Requires ${multItem.gemCost} 💎 or VIP Pass`
+        );
+      }
+    }
+  };
+
+  const handleSelectOrBuyProp = (prop) => {
     if (unlockedProps.includes(prop.id)) {
       setEquippedProp(prop.id);
-      soundEngine.playCatchSound(3, false);
+      showToast(`${prop.icon} ${prop.name[lang]} ${t.equipped}`);
       return;
     }
-    if (prop.currency === 'coins' && coins >= prop.cost) {
-      setCoins((c) => c - prop.cost);
-      setUnlockedProps((u) => [...u, prop.id]);
-      setEquippedProp(prop.id);
-      soundEngine.playVictory();
-    } else if (prop.currency === 'gems' && gems >= prop.cost) {
-      setGems((g) => g - prop.cost);
-      setUnlockedProps((u) => [...u, prop.id]);
-      setEquippedProp(prop.id);
-      soundEngine.playVictory();
+    if (prop.currency === 'coins') {
+      if (coins >= prop.cost) {
+        setCoins((c) => c - prop.cost);
+        setUnlockedProps((prev) => [...prev, prop.id]);
+        setEquippedProp(prop.id);
+        soundEngine.playVictory();
+        showToast(`${prop.icon} ${prop.name[lang]}!`);
+      } else {
+        showToast(
+          lang === 'es'
+            ? `🪙 Necesitás ${prop.cost.toLocaleString()} Monedas`
+            : `🪙 Need ${prop.cost.toLocaleString()} Coins`
+        );
+      }
+    } else {
+      if (gems >= prop.cost) {
+        setGems((g) => g - prop.cost);
+        setUnlockedProps((prev) => [...prev, prop.id]);
+        setEquippedProp(prop.id);
+        soundEngine.playVictory();
+        showToast(`${prop.icon} ${prop.name[lang]}!`);
+      } else {
+        setActiveTab('store');
+        showToast(lang === 'es' ? '💎 Gemas insuficientes' : '💎 Not enough gems');
+      }
     }
   };
 
-  const handleClaimStoreBundle = (bundle) => {
-    soundEngine.init();
-    setGems((g) => g + bundle.gems);
-    setCoins((c) => c + bundle.coins);
-    soundEngine.playVictory();
-    setShopNotice(`+${bundle.gems} 💎  +${bundle.coins} 🪙`);
-    setTimeout(() => setShopNotice(''), 2500);
+  // ============================================================================
+  // BLOQUE 4: CIUDADES EXCLUSIVAS VIP Y SELECTOR DE CAMPAÑA
+  // ============================================================================
+  const handleSelectCity = (cityIdx) => {
+    const highestUnlocked = Math.max(maxUnlockedCity, Math.min(19, Math.floor((level - 1) / 5)));
+    if (cityIdx > highestUnlocked) return;
+    const targetLevel = cityIdx * 5 + 1;
+    setActiveVipCityId(null);
+    setLevel(targetLevel);
+    setShowCitySelectorModal(false);
+    showToast(
+      lang === 'es'
+        ? `✈️ Viajaste a ${CITIES[cityIdx].flag} ${CITIES[cityIdx].name.es} (Nivel ${targetLevel})`
+        : `✈️ Traveled to ${CITIES[cityIdx].flag} ${CITIES[cityIdx].name.en} (Level ${targetLevel})`
+    );
   };
 
-  // Construcción del Ranking Online de Liga de Temporada combinando rivales + perfiles sincronizados + jugador activo
-  const externalRegisteredPlayers = onlineRegistry.filter(
-    (entry) => entry && entry.id && entry.id !== (playerId || 'player')
+  const handleSelectOrUnlockVipCity = (vipCity) => {
+    const isUnlocked = vipPassActive || unlockedVipCities.includes(vipCity.id);
+    if (isUnlocked) {
+      setActiveVipCityId(vipCity.id);
+      setShowCitySelectorModal(false);
+      soundEngine.playVictory();
+      showToast(
+        lang === 'es'
+          ? `👑 Ciudad VIP Activa: ${vipCity.flag} ${vipCity.name.es} (x${vipCity.rewardMult} Recompensas)`
+          : `👑 VIP City Active: ${vipCity.flag} ${vipCity.name.en} (x${vipCity.rewardMult} Rewards)`
+      );
+      return;
+    }
+
+    if (gems >= vipCity.gemUnlockCost) {
+      setGems((g) => g - vipCity.gemUnlockCost);
+      setUnlockedVipCities((prev) => [...prev, vipCity.id]);
+      setActiveVipCityId(vipCity.id);
+      setShowCitySelectorModal(false);
+      soundEngine.playVictory();
+      showToast(`👑 ${vipCity.flag} ${vipCity.name[lang]} Desbloqueada!`);
+    } else {
+      setShowCitySelectorModal(false);
+      setActiveTab('store');
+      showToast(
+        lang === 'es'
+          ? `🔒 Ciudad Exclusiva VIP: Desbloqueala con Pase VIP Pro o ${vipCity.gemUnlockCost} 💎`
+          : `🔒 Exclusive VIP City: Unlock with VIP Pro Pass or ${vipCity.gemUnlockCost} 💎`
+      );
+    }
+  };
+
+  const handleBuyBundle = (bundle) => {
+    setGems((g) => g + bundle.gems);
+    setCoins((c) => c + bundle.coins);
+    if (bundle.isVipPassBundle) {
+      setVipPassActive(true);
+      setUnlockedPoles((prev) =>
+        Array.from(new Set([...prev, 'pole_imperial', 'pole_quantum']))
+      );
+      setEquippedPole('pole_imperial');
+      setUnlockedSkins((prev) => Array.from(new Set([...prev, 'skin_5', 'skin_4'])));
+      setEquippedSkin('skin_5');
+      setOwnedMultipliers((prev) => Array.from(new Set([...prev, 'mult_x3_pro'])));
+      setUnlockedVipCities(VIP_CITIES.map((vc) => vc.id));
+    }
+    setLeaguePoints((lp) => {
+      const nextLp = lp + (bundle.leaguePts || 200);
+      syncPlayerScore(playerName || 'Equilibrista', playerCountry, nextLp, level);
+      return nextLp;
+    });
+    soundEngine.playVictory();
+    showToast(
+      bundle.isVipPassBundle
+        ? lang === 'es'
+          ? '👑 ¡PASE VIP PRO ACTIVADO! Todo el equipo Élite y Ciudades VIP desbloqueadas'
+          : '👑 VIP PRO PASS ACTIVATED! All Elite gear & VIP Cities unlocked'
+        : `👑 ${bundle.name[lang]} (+${bundle.gems} 💎 / +${bundle.coins.toLocaleString()} 🪙)`
+    );
+  };
+
+  const handleClaimTier = (tier) => {
+    if (claimedTiers.includes(tier.id) || leaguePoints < tier.requiredLp) return;
+    setClaimedTiers((prev) => [...prev, tier.id]);
+    setGems((g) => g + tier.gemsReward);
+    setCoins((c) => c + tier.coinsReward);
+    soundEngine.playVictory();
+    showToast(`🏆 +${tier.gemsReward} 💎 & +${tier.coinsReward} 🪙!`);
+  };
+
+  // ============================================================================
+  // RANKING LIVE DATA
+  // ============================================================================
+  const leaderboard =
+    liveLeaderboard.length > 0
+      ? liveLeaderboard
+      : [
+          {
+            id: 'player_self',
+            name: playerName || 'Equilibrista',
+            country: playerCountry,
+            flag: getCountryFlag(playerCountry),
+            score: leaguePoints,
+            lp: leaguePoints,
+            level,
+            isPlayer: true,
+          },
+        ];
+  const playerRankIndex = leaderboard.findIndex((r) => r.isPlayer);
+  const playerRank = playerRankIndex >= 0 ? playerRankIndex + 1 : 1;
+
+  const windDirArrow =
+    Math.abs(hudData.windForce) < 0.08
+      ? '•'
+      : hudData.windForce > 0
+      ? '>>>'
+      : '<<<';
+
+  const highestUnlockedCityIdx = Math.max(
+    maxUnlockedCity,
+    Math.min(19, Math.floor((level - 1) / 5))
   );
-
-  const leagueStandings = [
-    ...SEASON_RIVALS,
-    ...externalRegisteredPlayers,
-    {
-      id: playerId || 'player',
-      name: displayPlayerName,
-      country: playerFlag,
-      countryCode: playerCountryObj.code,
-      lp: leaguePoints,
-      badge: '⭐',
-      isPlayer: true,
-    },
-  ].sort((a, b) => b.lp - a.lp);
-
-  const playerRank = leagueStandings.findIndex((r) => r.isPlayer) + 1;
-
-  const windAbs = Math.abs(hudState.windCurrent).toFixed(1);
-  const windArrows =
-    hudState.windCurrent < -0.8
-      ? '◄◄'
-      : hudState.windCurrent < -0.15
-        ? '◄'
-        : hudState.windCurrent > 0.8
-          ? '►►'
-          : hudState.windCurrent > 0.15
-            ? '►'
-            : '•';
-
-  const isInDangerZone =
-    hudState.fallSlowMo || Math.abs(hudState.angleDeg) > 30;
+  const playerFlagEmoji = getCountryFlag(playerCountry);
 
   return (
-    <div className="game-shell">
-      {/* Contenedor del Motor 3D Real WebGL (`Three.js`) con estética "Vector" */}
-      <div ref={mountRef} className="webgl-mount" />
-
-      {/* ==================== PANTALLA DE CARGA INICIAL CON PORTADA `./icon.jpg` ==================== */}
-      {isInitialLoading && (
+    <div className="app-root">
+      <div className="phone-frame">
+        {/* CONTENEDOR 3D WEBGL (THREE.JS VECTOR ENGINE + MONUMENTOS 3D) */}
         <div
-          className="modal-backdrop"
-          style={{
-            zIndex: 90,
-            flexDirection: 'column',
-            gap: '14px',
-            background: 'radial-gradient(circle at 50% 35%, #09152b 0%, #02040a 85%)',
-          }}
-        >
-          <div
-            style={{
-              position: 'relative',
-              width: '82%',
-              maxWidth: '320px',
-              borderRadius: '18px',
-              overflow: 'hidden',
-              border: '2px solid rgba(0, 242, 254, 0.75)',
-              boxShadow: '0 0 32px rgba(0, 242, 254, 0.45), 0 18px 40px rgba(0, 0, 0, 0.9)',
-            }}
-          >
-            <img
-              src={coverSrc}
-              onError={handleCoverImageError}
-              alt="NO MIRES ABAJO"
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background:
-                  'linear-gradient(180deg, rgba(5,8,17,0) 55%, rgba(5,8,17,0.95) 100%)',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              fontFamily: 'Bebas Neue, Orbitron, sans-serif',
-              fontSize: '2rem',
-              letterSpacing: '0.08em',
-              color: '#fde047',
-              textShadow: '0 0 16px rgba(0, 242, 254, 0.6)',
-            }}
-          >
-            {t.title}
-          </div>
-        </div>
-      )}
+          ref={mountRef}
+          className="game-canvas"
+          style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+        />
 
-      {/* ==================== PASO 2: PANTALLA DE BIENVENIDA Y REGISTRO OBLIGATORIA (`z-index: 9999`) ==================== */}
-      {!isInitialLoading && showOnboardingModal && (
-        <div
-          className="onboarding-priority-backdrop backdrop-blur-xl bg-slate-950/90"
-          style={{ zIndex: 9999 }}
-        >
-          <form
-            className="onboarding-modal-card"
-            onSubmit={handleSaveOnboardingProfile}
-          >
-            <div>
-              <h2 className="onboarding-title">{t.onboardingTitle}</h2>
-              <p className="onboarding-subtitle">{t.onboardingSubtitle}</p>
-            </div>
+        {/* TOAST FEEDBACK */}
+        {toastMsg && <div className="toast-banner">{toastMsg}</div>}
 
-            {/* Conservación visible de progreso LP / Monedas / Gemas del jugador */}
+        {/* ====================================================================
+            MODAL DE BIENVENIDA Y REGISTRO OBLIGATORIO (ONBOARDING)
+            ==================================================================== */}
+        {showOnboardingModal && (
+          <div className="modal-backdrop onboarding-backdrop" style={{ zIndex: 250 }}>
+            <form
+              className="modal-card onboarding-modal-card"
+              onSubmit={handleSaveOnboardingProfile}
+            >
+              <div className="onboarding-crown-badge">
+                {lang === 'es' ? '🏆 LIGA MUNDIAL EN VIVO' : '🏆 LIVE WORLD LEAGUE'}
+              </div>
+              <h2 className="modal-title onboarding-title">
+                {lang === 'es'
+                  ? '⚡ CREÁ TU PERFIL DE EQUILIBRISTA'
+                  : '⚡ CREATE YOUR TIGHTROPE PROFILE'}
+              </h2>
+              <p className="modal-subtitle onboarding-subtitle">
+                {lang === 'es'
+                  ? 'Elegí tu nombre y país para competir en el Ranking Mundial en vivo.'
+                  : 'Choose your name and country to compete on the Live World Leaderboard.'}
+              </p>
+
+              <div className="onboarding-field-group">
+                <label className="onboarding-label" htmlFor="onboarding-name-input">
+                  {lang === 'es'
+                    ? '1. TU NOMBRE O APODO (3 A 15 CARACTERES)'
+                    : '1. YOUR NAME OR NICKNAME (3 TO 15 CHARS)'}
+                </label>
+                <input
+                  id="onboarding-name-input"
+                  type="text"
+                  maxLength={15}
+                  autoFocus
+                  className={`onboarding-input ${onboardingError ? 'input-error-shake' : ''}`}
+                  placeholder={
+                    lang === 'es' ? 'Tu Nombre o Apodo (Ej: Maury_AR)' : 'Your Nickname (e.g. Maury_AR)'
+                  }
+                  value={onboardingNameInput}
+                  onChange={(e) => {
+                    setOnboardingNameInput(e.target.value);
+                    if (onboardingError) setOnboardingError(false);
+                  }}
+                />
+                {onboardingError && (
+                  <div className="onboarding-error-msg">
+                    {lang === 'es'
+                      ? '⚠️ Ingresá un nombre válido de al menos 3 caracteres.'
+                      : '⚠️ Please enter a valid name of at least 3 characters.'}
+                  </div>
+                )}
+              </div>
+
+              <div className="onboarding-field-group">
+                <label className="onboarding-label">
+                  {lang === 'es'
+                    ? '2. SELECCIONÁ TU PAÍS / BANDERA'
+                    : '2. SELECT YOUR COUNTRY / FLAG'}
+                </label>
+                <div className="onboarding-country-grid">
+                  {COUNTRIES.map((c) => {
+                    const selected = onboardingCountryInput === c.code;
+                    return (
+                      <button
+                        type="button"
+                        key={c.code}
+                        className={`onboarding-country-chip ${selected ? 'selected' : ''}`}
+                        onClick={() => setOnboardingCountryInput(c.code)}
+                      >
+                        <span className="country-chip-flag">{c.flag}</span>
+                        <span className="country-chip-code">{c.code}</span>
+                        <span className="country-chip-name">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button type="submit" className="onboarding-submit-btn">
+                {lang === 'es'
+                  ? '🚀 GUARDAR Y ENTRAR A COMPETIR'
+                  : '🚀 SAVE & START COMPETING'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ====================================================================
+            MODAL SELECTOR DE CIUDADES (CAMPAÑA 20 CIUDADES + 4 CIUDADES VIP)
+            ==================================================================== */}
+        {showCitySelectorModal && (
+          <div className="modal-backdrop" style={{ zIndex: 120 }}>
             <div
+              className="modal-card"
               style={{
+                maxHeight: '86%',
                 display: 'flex',
-                justifyContent: 'center',
-                gap: '10px',
-                padding: '6px 10px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.85)',
-                border: '1px solid rgba(250, 204, 21, 0.38)',
-                fontSize: '0.76rem',
-                fontWeight: 800,
-                color: '#fde047',
+                flexDirection: 'column',
+                padding: '16px 14px',
               }}
             >
-              <span>🏆 {leaguePoints} LP</span>
-              <span>•</span>
-              <span>📍 Nv. {maxUnlockedLevel}/100</span>
-              <span>•</span>
-              <span>🪙 {coins}</span>
-              <span>•</span>
-              <span>💎 {gems}</span>
-            </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                <h2 className="modal-title" style={{ fontSize: 16, margin: 0 }}>
+                  {lang === 'es'
+                    ? '🌍 CIUDADES Y MONUMENTOS 3D'
+                    : '🌍 CITIES & 3D LANDMARKS'}
+                </h2>
+                <button
+                  className="hud-pause-btn"
+                  onClick={() => setShowCitySelectorModal(false)}
+                  style={{ width: 30, height: 30, fontSize: 13 }}
+                >
+                  ✕
+                </button>
+              </div>
 
-            {/* Input de texto para NOMBRE O APODO */}
-            <div className="onboarding-field-group">
-              <div className="onboarding-label-row">
-                <label htmlFor="nma-nickname-input">{t.onboardingNameLabel}</label>
-                <span
+              <div
+                className="items-scroll-list"
+                style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}
+              >
+                {/* BLOQUE 4: CIUDADES EXCLUSIVAS VIP */}
+                <div
                   style={{
-                    color: isOnboardingValid ? '#4ade80' : '#fde047',
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: '#fde047',
+                    letterSpacing: 0.8,
+                    marginBottom: 6,
+                    marginTop: 2,
                   }}
                 >
-                  {nonSpaceOnboardingChars}/16
-                </span>
-              </div>
-              <input
-                id="nma-nickname-input"
-                ref={onboardingInputRef}
-                type="text"
-                className="onboarding-name-input"
-                placeholder={t.onboardingNamePlaceholder}
-                value={onboardingNameInput}
-                maxLength={16}
-                autoFocus
-                autoComplete="off"
-                onChange={(e) => setOnboardingNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && isOnboardingValid) {
-                    handleSaveOnboardingProfile(e);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Selector visual de PAÍS / BANDERA en grilla con AR (Argentina) preseleccionado por defecto */}
-            <div className="onboarding-field-group">
-              <div className="onboarding-label-row">
-                <span>{t.onboardingCountryLabel}</span>
-                <span style={{ color: '#fde047' }}>
-                  {getCountryOption(onboardingCountryInput).flag}{' '}
-                  {getCountryOption(onboardingCountryInput).code}
-                </span>
-              </div>
-              <div className="onboarding-country-grid">
-                {COUNTRIES_LIST.map((cItem) => {
-                  const isSelected = onboardingCountryInput === cItem.code;
+                  {t.vipCitiesTitle}
+                </div>
+                {VIP_CITIES.map((vc) => {
+                  const isUnlocked = vipPassActive || unlockedVipCities.includes(vc.id);
+                  const isCurrentVip = activeVipCityId === vc.id;
                   return (
-                    <button
-                      key={cItem.code}
-                      type="button"
-                      className={`onboarding-country-btn ${
-                        isSelected ? 'selected' : ''
-                      }`}
-                      onClick={() => {
-                        soundEngine.init();
-                        soundEngine.playCatchSound(3, false);
-                        setOnboardingCountryInput(cItem.code);
+                    <div
+                      key={vc.id}
+                      className="item-card vip-city-card"
+                      style={{
+                        cursor: 'pointer',
+                        borderColor: isCurrentVip
+                          ? 'rgba(253, 224, 71, 0.95)'
+                          : 'rgba(250, 204, 21, 0.45)',
                       }}
+                      onClick={() => handleSelectOrUnlockVipCity(vc)}
                     >
-                      <span>{cItem.label}</span>
-                    </button>
+                      <div className="item-icon-box" style={{ fontSize: 22 }}>
+                        {isUnlocked ? vc.flag : '🔒'}
+                      </div>
+                      <div className="item-info">
+                        <div className="item-title" style={{ color: '#fde047' }}>
+                          👑 {vc.name[lang]}
+                        </div>
+                        <div className="benefit-pill-tag pro">
+                          x{vc.rewardMult} 🪙/LP • +{vc.gemBonus} 💎 POR CRUCE
+                        </div>
+                        <div className="item-desc">{vc.desc[lang]}</div>
+                      </div>
+                      <button
+                        className={`item-action-btn ${
+                          isCurrentVip ? 'equipped' : 'buy-gems'
+                        }`}
+                      >
+                        {isCurrentVip
+                          ? lang === 'es'
+                            ? 'ACTIVA'
+                            : 'ACTIVE'
+                          : isUnlocked
+                          ? lang === 'es'
+                            ? 'VIAJAR'
+                            : 'TRAVEL'
+                          : `👑 ${vc.gemUnlockCost} 💎`}
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* 20 CIUDADES DE CAMPAÑA CON MONUMENTOS 3D */}
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: '#38bdf8',
+                    letterSpacing: 0.8,
+                    margin: '12px 0 6px',
+                  }}
+                >
+                  {lang === 'es'
+                    ? '🏙️ 20 CIUDADES DEL TOUR MUNDIAL (MONUMENTOS 3D)'
+                    : '🏙️ 20 WORLD TOUR CITIES (3D LANDMARKS)'}
+                </div>
+                {CITIES.map((city, idx) => {
+                  const isUnlocked = idx <= highestUnlockedCityIdx;
+                  const isCurrent = !activeVipCityId && cfg.cityIndex === idx;
+                  const startLvl = idx * 5 + 1;
+                  const endLvl = idx * 5 + 5;
+                  return (
+                    <div
+                      key={city.index}
+                      className={`item-card ${isCurrent ? 'selected' : ''}`}
+                      style={{
+                        opacity: isUnlocked ? 1 : 0.52,
+                        cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                      }}
+                      onClick={() => isUnlocked && handleSelectCity(idx)}
+                    >
+                      <div className="item-icon-box" style={{ fontSize: 22 }}>
+                        {isUnlocked ? city.flag : '🔒'}
+                      </div>
+                      <div className="item-info">
+                        <div className="item-title">
+                          {idx + 1}. {city.name[lang]}
+                        </div>
+                        <div className="benefit-pill-tag">
+                          🗿 {city.monumentName?.[lang] || city.weatherLabel?.[lang]}
+                        </div>
+                        <div className="item-desc">
+                          {lang === 'es'
+                            ? `Niveles ${startLvl} al ${endLvl} • ${city.weatherLabel?.es}`
+                            : `Levels ${startLvl} to ${endLvl} • ${city.weatherLabel?.en}`}
+                        </div>
+                      </div>
+                      <button
+                        className={`item-action-btn ${
+                          isCurrent ? 'equipped' : isUnlocked ? 'buy-coins' : 'locked'
+                        }`}
+                        disabled={!isUnlocked}
+                      >
+                        {isCurrent
+                          ? lang === 'es'
+                            ? 'ACTUAL'
+                            : 'ACTIVE'
+                          : isUnlocked
+                          ? lang === 'es'
+                            ? `NV. ${startLvl}`
+                            : `LVL ${startLvl}`
+                          : `🔒 NV.${startLvl}`}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             </div>
-
-            {/* Botón principal de confirmación */}
-            <button
-              type="submit"
-              className="onboarding-submit-btn"
-              disabled={!isOnboardingValid}
-            >
-              {t.onboardingSaveCta}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* ==================== BARRA DE MENÚ PRINCIPAL (OCULTA DURANTE LA PARTIDA ACTIVA) ==================== */}
-      {gameStatus !== 'PLAYING' && (
-        <header className="top-utility-bar">
-          <div
-            className="league-strip"
-            onClick={() => {
-              engineRef.current.paused = true;
-              setActiveModal('LEAGUE');
-            }}
-          >
-            <div className="league-strip-left">
-              <span>🏆 {t.leagueBanner}:</span>
-              <span className="league-points-badge">
-                #{playerRank} ({leaguePoints} {t.leaguePointsShort})
-              </span>
-            </div>
-            <span className="league-timer">
-              ⏳ {seasonClock.days}d {seasonClock.hours}h
-            </span>
           </div>
+        )}
 
-          <div className="nav-pills-row">
-            <div className="nav-pills-group">
-              {/* PASO 3: Insignia activa del jugador `[Bandera] [Nombre] (✏️)` con edición rápida */}
-              <button
-                type="button"
-                className="mini-pill player-identity-pill"
-                title={t.editProfileTooltip}
-                onClick={openProfileEditor}
-              >
-                <span>{playerFlag}</span>
-                <span className="player-identity-name">{displayPlayerName}</span>
-                <span>✏️</span>
-              </button>
+        {/* ====================================================================
+            HUD MINIMALISTA VECTOR (SOLO DURANTE PARTIDA)
+            ==================================================================== */}
+        {gameState === 'playing' && (
+          <div className="gameplay-hud-layer">
+            {hudData.lightningFlashAlpha > 0.05 && (
+              <div
+                className="weather-lightning-flash"
+                style={{ opacity: hudData.lightningFlashAlpha }}
+              />
+            )}
 
-              <button
-                type="button"
-                className="mini-pill gold"
-                onClick={() => {
-                  engineRef.current.paused = true;
-                  setActiveModal('CITIES');
-                }}
-              >
-                {currentCity.flag} {t.level} {currentLevel}/100
-              </button>
-              <button
-                type="button"
-                className="mini-pill cyan"
-                onClick={() => {
-                  engineRef.current.paused = true;
-                  setActiveModal('ARMORY');
-                }}
-              >
-                ⚙️ {t.armoryBtn}
-              </button>
-            </div>
-
-            <div className="nav-pills-group">
-              <button
-                type="button"
-                className="mini-pill"
-                onClick={() => {
-                  soundEngine.init();
-                  setSoundOn((s) => !s);
-                }}
-              >
-                {soundOn ? '🔊' : '🔇'}
-              </button>
-              <button
-                type="button"
-                className="mini-pill"
-                onClick={() => setLang((l) => (l === 'es' ? 'en' : 'es'))}
-              >
-                {lang.toUpperCase()}
-              </button>
-            </div>
-          </div>
-        </header>
-      )}
-
-      {/* ==================== BARRA SUPERIOR TRANSLÚCIDA COMPACTA EN PARTIDA ==================== */}
-      {gameStatus === 'PLAYING' && (
-        <>
-          <section
-            className={`compact-play-hud ${hudState.isFeverMode ? 'fever-active' : ''}`}
-          >
-            <div className="compact-hud-top-row">
-              <div className="compact-hud-city">
-                <span>{currentCity.flag}</span>
-                <span className="compact-hud-lvl-badge">Nv.{currentLevel}</span>
-                <span className="compact-hud-speed-badge">
-                  {hudState.walkSpeedMultiplier.toFixed(2)}x
-                </span>
-                <span>{currentCity.name[lang]}</span>
-              </div>
-
-              <div className="compact-hud-metrics">
-                <div className="compact-metric-pill distance">
-                  <span className="compact-dist-cur">{hudState.distance}m</span>
-                  <span className="compact-dist-target">/ {hudState.targetDistance}m</span>
+            <div className="vector-hud-top">
+              <div className="vector-top-row">
+                <div className="vector-city-tag">
+                  <span>
+                    {cfg.city.flag} {cfg.city.name[lang].toUpperCase()} •{' '}
+                    {activeVipCity ? '👑 VIP' : `${t.level} ${level}`}
+                  </span>
+                  <span className="vector-meters-left">
+                    {hudData.metersRemaining}m / {hudData.totalMeters}m
+                  </span>
                 </div>
-
-                <div className="compact-metric-pill wind">
-                  <span>💨 {windArrows} {windAbs}</span>
-                </div>
-
-                <div className="compact-metric-pill mult">
-                  <span>x{hudState.multiplier}</span>
-                </div>
-
                 <button
-                  type="button"
-                  className="compact-pause-btn"
-                  title="Mute / Audio"
-                  onClick={() => {
-                    soundEngine.init();
-                    setSoundOn((s) => !s);
-                  }}
-                >
-                  {soundOn ? '🔊' : '🔇'}
-                </button>
-
-                <button
-                  type="button"
-                  className="compact-pause-btn"
-                  title={t.pauseBtn}
-                  onClick={() => {
-                    engineRef.current.paused = true;
-                    setActiveModal('PAUSE');
-                  }}
+                  className="hud-pause-btn"
+                  onClick={triggerPause}
+                  aria-label="Pause"
                 >
                   ⏸
                 </button>
               </div>
-            </div>
 
-            <div className="balance-axis-row">
-              <span className="balance-axis-label">
-                {lang === 'es' ? 'EJE' : 'AXIS'}
-              </span>
-              <div className="balance-axis-track">
-                <div className="balance-axis-center-notch" />
-                <div ref={needleRef} className="balance-axis-needle" />
-              </div>
-              {hudState.isFeverMode ? (
-                <span className="fever-mode-pill">{t.feverModeBadge}</span>
-              ) : (
-                <span className="balance-axis-label" style={{ color: '#fde047' }}>
-                  🔥{hudState.combo}
-                </span>
-              )}
-            </div>
-          </section>
-
-          {hudState.windWarningActive && (
-            <div className="wind-gust-alert-pill">
-              <span>{t.windGustAlert}</span>
-            </div>
-          )}
-
-          {nearMissBanner > 0 && (
-            <div key={nearMissBanner} className="near-miss-floater">
-              {t.nearMissPopup}
-            </div>
-          )}
-
-          {handPopup && (
-            <div
-              key={handPopup.id}
-              className={`hand-catch-floater ${handPopup.side} ${
-                handPopup.isPerfect ? 'perfect' : 'good'
-              }`}
-            >
-              {handPopup.text}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ==================== LOBBY OVERLAY (`activeTab === 'home'`) ==================== */}
-      {gameStatus === 'LOBBY' && activeTab === 'home' && (
-        <div className="lobby-overlay">
-          <div className="lobby-top-section">
-            <div
-              className="rounded-2xl"
-              style={{
-                position: 'relative',
-                width: '100%',
-                height: '132px',
-                borderRadius: '16px',
-                overflow: 'hidden',
-                border: '1.5px solid rgba(0, 242, 254, 0.72)',
-                boxShadow:
-                  '0 0 24px rgba(0, 242, 254, 0.38), 0 10px 26px rgba(0, 0, 0, 0.85)',
-              }}
-            >
-              <img
-                src={coverSrc}
-                onError={handleCoverImageError}
-                alt="NO MIRES ABAJO"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  objectPosition: 'center 28%',
-                  display: 'block',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background:
-                    'linear-gradient(180deg, rgba(5, 8, 17, 0.1) 0%, rgba(5, 8, 17, 0.45) 52%, rgba(9, 15, 32, 0.96) 100%)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                }}
-              >
-                <h1
-                  className="lobby-main-title"
-                  style={{ fontSize: '2.1rem', marginBottom: '2px' }}
-                >
-                  {t.title}
-                </h1>
+              <div className="vector-progress-rail">
                 <div
-                  className="lobby-level-subtitle"
-                  onClick={() => setActiveModal('CITIES')}
-                  style={{ cursor: 'pointer', marginTop: 0 }}
-                >
-                  <span>
-                    📍 {t.level} {currentLevel}/100 — {currentCity.flag}{' '}
-                    {currentCity.name[lang]} ({levelCfg.totalDistance}m •{' '}
-                    {levelCfg.walkSpeedMultiplier.toFixed(2)}x)
-                  </span>
-                </div>
+                  className="vector-progress-fill"
+                  style={{ width: `${hudData.progress}%` }}
+                />
               </div>
-            </div>
 
-            <div
-              className="lobby-league-banner"
-              onClick={() => setActiveModal('LEAGUE')}
-            >
-              <div className="lobby-league-row">
-                <span
-                  style={{
-                    fontWeight: 900,
-                    fontSize: '0.84rem',
-                    color: '#fde047',
-                  }}
-                >
-                  🏆 {t.leagueBanner} — #{playerRank} ({leaguePoints} LP)
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.74rem',
-                    color: '#67e8f9',
-                    fontWeight: 800,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openProfileEditor();
-                  }}
-                >
-                  {playerFlag} {displayPlayerName} (✏️)
-                </span>
-              </div>
-              <div
-                style={{
-                  fontSize: '0.74rem',
-                  color: '#cbd5e1',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <span>{currentCity.weatherLabel[lang]}</span>
-                <span>
-                  🪙 {coins} | 💎 {gems}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="lobby-bottom-section">
-            <div className="lobby-prep-grid">
-              <button
-                type="button"
-                className="lobby-prep-btn gold-border"
-                onClick={() => {
-                  setActiveTab('home');
-                  setActiveModal('CITIES');
-                }}
-              >
-                <span style={{ fontSize: '1.15rem' }}>🌍</span>
-                <span>{t.citiesBtn}</span>
-              </button>
-              <button
-                type="button"
-                className="lobby-prep-btn cyan-border"
-                onClick={() => {
-                  setActiveTab('home');
-                  setActiveModal('ARMORY');
-                }}
-              >
-                <span style={{ fontSize: '1.15rem' }}>⚙️</span>
-                <span>{t.armoryBtn}</span>
-              </button>
-              <button
-                type="button"
-                className="lobby-prep-btn"
-                onClick={() => {
-                  setActiveTab('home');
-                  setActiveModal('SKINS');
-                }}
-              >
-                <span style={{ fontSize: '1.15rem' }}>🧥</span>
-                <span>{t.skinsBtn}</span>
-              </button>
-              <button
-                type="button"
-                className="lobby-prep-btn gold-border"
-                onClick={() => {
-                  setActiveTab('home');
-                  setActiveModal('SHOP');
-                }}
-              >
-                <span style={{ fontSize: '1.15rem' }}>💎</span>
-                <span>{t.shopBtn}</span>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="lobby-play-btn"
-              onClick={startRun}
-            >
-              {t.playNowBtn}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== CONTROLES TÁCTILES INVISIBLES / MINIMALISTAS ESTILO "VECTOR" ==================== */}
-      {gameStatus === 'PLAYING' && (
-        <>
-          <div className="multitouch-split-overlay">
-            <div
-              className="multitouch-half-panel"
-              onPointerDown={(e) => handleThumbDown('L', e)}
-              onPointerUp={(e) => handleThumbUp('L', e)}
-              onPointerCancel={(e) => handleThumbUp('L', e)}
-              onPointerLeave={(e) => handleThumbUp('L', e)}
-            />
-            <div
-              className="multitouch-half-panel"
-              onPointerDown={(e) => handleThumbDown('R', e)}
-              onPointerUp={(e) => handleThumbUp('R', e)}
-              onPointerCancel={(e) => handleThumbUp('R', e)}
-              onPointerLeave={(e) => handleThumbUp('R', e)}
-            />
-          </div>
-
-          <div className="vector-minimal-hud">
-            <div
-              className={`vector-corner-indicator left ${
-                hudState.leftPressed ? 'pressed' : ''
-              } ${hudState.leftTimingReady ? 'timing-ready' : ''}`}
-            >
-              <span className="vector-corner-label">◄ {t.left}</span>
-              <div className="vector-corner-line" />
-            </div>
-
-            <div className="vector-center-micro-bar">
-              {hudState.juggleCount < 4 && (
-                <button
-                  type="button"
-                  className="vector-micro-pill gold"
-                  onClick={handleAddJuggleObject}
-                >
-                  <span>+1 🟡</span>
-                  <span>({hudState.juggleCount}/4)</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                className={`vector-micro-pill ${isInDangerZone ? 'danger' : ''}`}
-                onClick={handleGrappleSave}
-              >
-                <span>🪝</span>
-                <span>
-                  {hudState.fallSlowMo
-                    ? `${hudState.slowMoTimer.toFixed(1)}s`
-                    : '20💎'}
-                </span>
-              </button>
-            </div>
-
-            <div
-              className={`vector-corner-indicator right ${
-                hudState.rightPressed ? 'pressed' : ''
-              } ${hudState.rightTimingReady ? 'timing-ready' : ''}`}
-            >
-              <span className="vector-corner-label">{t.right} ►</span>
-              <div className="vector-corner-line" />
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ==================== MODAL: SEASONAL LEAGUE ==================== */}
-      {activeModal === 'LEAGUE' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">🏆 {t.leagueModalTitle}</h2>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.84rem', color: '#cbd5e1', marginBottom: '12px' }}>
-              {t.leagueModalSub}
-            </p>
-
-            <div
-              className="item-card highlight"
-              style={{ marginBottom: '12px', textAlign: 'center' }}
-            >
-              <div style={{ fontSize: '0.78rem', color: '#fde047', fontWeight: 800 }}>
-                ⏳ {t.seasonEndsIn}: {seasonClock.days}d {seasonClock.hours}h{' '}
-                {seasonClock.mins}m {seasonClock.secs}s
-              </div>
-              <div
-                style={{
-                  fontSize: '1.35rem',
-                  fontWeight: 900,
-                  color: '#ffffff',
-                  marginTop: '2px',
-                }}
-              >
-                #{playerRank} — {leaguePoints} {t.leaguePointsShort}
-              </div>
-              {/* PASO 3: Insignia activa del jugador dentro de la Liga de Temporada */}
-              <div style={{ marginTop: '6px' }}>
-                <button
-                  type="button"
-                  className="mini-pill cyan"
-                  onClick={openProfileEditor}
-                >
-                  <span>{playerFlag}</span>
-                  <span style={{ fontWeight: 900, color: '#fde047' }}>
-                    {displayPlayerName}
-                  </span>
-                  <span>(✏️)</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid-list" style={{ marginBottom: '14px' }}>
-              {SEASON_REWARD_TIERS.map((tier) => (
+              <div className="vector-Horizon-pill-row">
                 <div
-                  key={tier.rankLabel}
-                  className="item-card"
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
+                  className={`vector-horizon-pill ${
+                    Math.abs(hudData.tiltRatio) > 0.65 ? 'danger' : ''
+                  }`}
                 >
-                  <div>
-                    <div style={{ fontWeight: 900, color: '#fde047' }}>
-                      {tier.icon} {tier.rankLabel} — {tier.title[lang]}
-                    </div>
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#67e8f9' }}>
-                    +{tier.gemsReward} 💎 | +{tier.coinsReward} 🪙
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid-list">
-              {leagueStandings.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  className={`league-rank-row ${entry.isPlayer ? 'is-player' : ''}`}
-                  onClick={entry.isPlayer ? openProfileEditor : undefined}
-                  style={entry.isPlayer ? { cursor: 'pointer' } : undefined}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 900, color: '#fde047', width: '24px' }}>
-                      #{idx + 1}
-                    </span>
-                    <span>{entry.country}</span>
-                    <span style={{ fontWeight: 800 }}>
-                      {entry.name} {entry.isPlayer ? '(✏️)' : ''}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 900, color: '#38bdf8' }}>
-                    {entry.lp} LP {entry.badge}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== MODAL: RPG ARMORY ==================== */}
-      {activeModal === 'ARMORY' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">⚙️ {t.armoryTitle}</h2>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.84rem', color: '#cbd5e1', marginBottom: '10px' }}>
-              {t.armorySub} (🪙 {coins})
-            </p>
-
-            <div className="grid-list">
-              {ARMORY_ITEMS.map((item) => {
-                const lvl = gearLevels[item.id] || 1;
-                const isMax = lvl >= item.maxLevel;
-                const nextCost = Math.round(
-                  item.baseCost * Math.pow(item.costScale, lvl - 1)
-                );
-                return (
-                  <div key={item.id} className="item-card highlight">
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <div style={{ fontWeight: 900, fontSize: '1.02rem' }}>
-                        {item.icon} {item.name[lang]} (Nv. {lvl}/{item.maxLevel})
-                      </div>
-                      <span
-                        style={{
-                          fontSize: '0.76rem',
-                          color: '#4ade80',
-                          fontWeight: 800,
-                        }}
-                      >
-                        {item.statLabel[lang]}
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: '0.78rem', color: '#cbd5e1' }}>
-                      {item.desc[lang]}
-                    </p>
-
-                    <div className="armory-progress-bar">
-                      {Array.from({ length: 10 }).map((_, pipIdx) => (
-                        <div
-                          key={pipIdx}
-                          className={`armory-pip ${pipIdx < lvl ? 'filled' : ''}`}
-                        />
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="pause-action-btn gold"
-                      style={{ marginTop: '6px', padding: '8px 12px' }}
-                      disabled={isMax || coins < nextCost}
-                      onClick={() => handleUpgradeGear(item)}
-                    >
-                      {isMax
-                        ? `✅ ${t.maxLevelLabel}`
-                        : `⬆️ ${t.upgradeBtn} — ${nextCost} 🪙`}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== MODAL: 20 CITIES / 100 LEVELS CAMPAIGN ==================== */}
-      {activeModal === 'CITIES' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">🌍 {t.citiesBtn} (100 Niveles)</h2>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="grid-list">
-              {CITIES.map((city, cIdx) => {
-                const startLvl = cIdx * 5 + 1;
-                return (
-                  <div key={city.id} className="item-card">
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontWeight: 900, color: '#fde047' }}>
-                        {city.flag} {cIdx + 1}. {city.name[lang]}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                        {city.weatherLabel[lang]}
-                      </span>
-                    </div>
-
-                    <div className="city-levels-row">
-                      {[0, 1, 2, 3, 4].map((offset) => {
-                        const lvlNum = startLvl + offset;
-                        const unlocked = lvlNum <= maxUnlockedLevel;
-                        const isCurrent = lvlNum === currentLevel;
-                        return (
-                          <button
-                            key={lvlNum}
-                            type="button"
-                            className={`lvl-chip ${isCurrent ? 'current' : ''} ${
-                              unlocked && !isCurrent ? 'completed' : ''
-                            } ${!unlocked ? 'locked' : ''}`}
-                            disabled={!unlocked}
-                            onClick={() => {
-                              setCurrentLevel(lvlNum);
-                              resetEngineForLevel(lvlNum, 'LOBBY');
-                            }}
-                          >
-                            Nv.{lvlNum}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== MODAL: SKINS & JUGGLING PROPS ==================== */}
-      {activeModal === 'SKINS' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">🧥 {t.skinsBtn}</h2>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <h3 style={{ fontSize: '0.95rem', color: '#67e8f9', marginBottom: '8px' }}>
-              🧥 Aspectos Urbanos (🪙 {coins} | 💎 {gems})
-            </h3>
-            <div className="grid-list" style={{ marginBottom: '16px' }}>
-              {SKINS.map((sk) => {
-                const isOwned = unlockedSkins.includes(sk.id);
-                const isEquipped = equippedSkin === sk.id;
-                return (
+                  <div className="vector-horizon-center-tick" />
                   <div
-                    key={sk.id}
-                    className={`item-card ${isEquipped ? 'highlight' : ''}`}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontWeight: 900 }}>
-                        {sk.name[lang]} (x{sk.bonusMult})
-                      </span>
-                      <button
-                        type="button"
-                        className="mini-pill gold"
-                        onClick={() => handleSkinAction(sk)}
-                      >
-                        {isEquipped
-                          ? '✅ EQUIPADO'
-                          : isOwned
-                            ? 'EQUIPAR'
-                            : `${sk.cost} ${sk.currency === 'gems' ? '💎' : '🪙'}`}
-                      </button>
-                    </div>
-                    <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
-                      {sk.desc[lang]}
-                    </span>
-                  </div>
-                );
-              })}
+                    className="vector-horizon-dot"
+                    style={{
+                      left: `${50 + Math.max(-46, Math.min(46, hudData.tiltRatio * 46))}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="vector-wind-badge">
+                  🌬️ {windDirArrow} {Math.abs(hudData.windForce * 18).toFixed(0)} km/h
+                </div>
+
+                <div
+                  className={`vector-score-badge ${
+                    hudData.frenzyActive ? 'frenzy-glow' : ''
+                  }`}
+                >
+                  {hudData.score.toLocaleString()} pts
+                  {hudData.combo > 1 ? ` • x${hudData.combo}` : ''}
+                  {hudData.frenzyActive ? ' 🔥' : ''}
+                </div>
+              </div>
             </div>
 
-            <h3 style={{ fontSize: '0.95rem', color: '#fde047', marginBottom: '8px' }}>
-              🎪 Objetos de Malabar 3D Especulares
-            </h3>
-            <div className="grid-list">
-              {JUGGLE_PROPS.map((pr) => {
-                const isOwned = unlockedProps.includes(pr.id);
-                const isEquipped = equippedProp === pr.id;
-                return (
+            {hudData.floatingPopups && hudData.floatingPopups.length > 0 && (
+              <div className="floating-popups-layer">
+                {hudData.floatingPopups.map((p) => (
                   <div
-                    key={pr.id}
-                    className={`item-card ${isEquipped ? 'highlight' : ''}`}
+                    key={p.id}
+                    className="floating-feedback-popup"
+                    style={{ color: p.color, borderColor: p.color }}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontWeight: 900 }}>
-                        {pr.icon} {pr.name[lang]} (x{pr.mult})
-                      </span>
-                      <button
-                        type="button"
-                        className="mini-pill gold"
-                        onClick={() => handlePropAction(pr)}
-                      >
-                        {isEquipped
-                          ? '✅ EQUIPADO'
-                          : isOwned
-                            ? 'EQUIPAR'
-                            : `${pr.cost} ${pr.currency === 'gems' ? '💎' : '🪙'}`}
-                      </button>
-                    </div>
+                    <div className="floating-popup-main">{p.text}</div>
+                    {p.subtext && <div className="floating-popup-sub">{p.subtext}</div>}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== MODAL: PLAY STORE CHEST SHOP ==================== */}
-      {activeModal === 'SHOP' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">💎 {t.shopTitle}</h2>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.82rem', color: '#cbd5e1', marginBottom: '12px' }}>
-              {t.shopSub}
-            </p>
-
-            {shopNotice && (
-              <div
-                className="item-card highlight"
-                style={{
-                  marginBottom: '10px',
-                  textAlign: 'center',
-                  color: '#4ade80',
-                  fontWeight: 900,
-                }}
-              >
-                🎁 {shopNotice}
+                ))}
               </div>
             )}
 
-            <div className="grid-list">
-              {STORE_BUNDLES.map((b) => (
-                <div
-                  key={b.id}
-                  className={`item-card ${b.popular ? 'highlight' : ''}`}
+            <div className="vector-controls-layer">
+              <div className="vector-touch-zones">
+                <button
+                  className="vector-touch-half left"
+                  onPointerDown={() => {
+                    engineRef.current.controlInput = -1;
+                  }}
+                  onPointerUp={() => {
+                    if (engineRef.current.controlInput < 0)
+                      engineRef.current.controlInput = 0;
+                  }}
+                  onPointerLeave={() => {
+                    if (engineRef.current.controlInput < 0)
+                      engineRef.current.controlInput = 0;
+                  }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
+                  <span className="vector-corner-hint">◀ {t.leanLeft}</span>
+                </button>
+
+                <button
+                  className="vector-touch-half right"
+                  onPointerDown={() => {
+                    engineRef.current.controlInput = 1;
+                  }}
+                  onPointerUp={() => {
+                    if (engineRef.current.controlInput > 0)
+                      engineRef.current.controlInput = 0;
+                  }}
+                  onPointerLeave={() => {
+                    if (engineRef.current.controlInput > 0)
+                      engineRef.current.controlInput = 0;
+                  }}
+                >
+                  <span className="vector-corner-hint">{t.leanRight} ▶</span>
+                </button>
+              </div>
+
+              <div className="vector-juggle-overlay-row">
+                <button
+                  className={`vector-catch-pill ${
+                    hudData.juggleAlertHands.left ? 'ready' : ''
+                  }`}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleCatchHand('left');
+                  }}
+                >
+                  ✋ {t.leftHand}
+                </button>
+
+                {hudData.hookAvailable && (
+                  <button
+                    className="vector-hook-pill"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      activateLifelineHook();
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 900, fontSize: '1rem' }}>
-                        {b.icon} {b.name[lang]}
+                    🪝
+                  </button>
+                )}
+
+                <button
+                  className={`vector-catch-pill ${
+                    hudData.juggleAlertHands.right ? 'ready' : ''
+                  }`}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleCatchHand('right');
+                  }}
+                >
+                  {t.rightHand} ✋
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================================
+            MENÚ PRINCIPAL Y NAVEGACIÓN DE 5 PESTAÑAS (FUERA DE PARTIDA)
+            ==================================================================== */}
+        {gameState === 'menu' && (
+          <div className="menu-overlay-layer">
+            <div className="currency-top-bar">
+              <div className="currency-group">
+                <div
+                  className="currency-pill coins"
+                  onClick={() => setShowAdModal('coins')}
+                  title={t.freeCoinsAd}
+                >
+                  🪙 {coins.toLocaleString()} <span className="plus-badge">+</span>
+                </div>
+                <div
+                  className="currency-pill gems"
+                  onClick={() => setShowAdModal('gems')}
+                  title={t.freeGemsAd}
+                >
+                  💎 {gems.toLocaleString()} <span className="plus-badge">+</span>
+                </div>
+                <div
+                  className="currency-pill lp"
+                  onClick={() => setActiveTab('league')}
+                >
+                  🏆 #{playerRank}
+                </div>
+              </div>
+
+              <div className="utility-group">
+                <button
+                  className="profile-header-badge"
+                  onClick={openEditProfileModal}
+                  title={lang === 'es' ? 'Editar Perfil' : 'Edit Profile'}
+                >
+                  <span>{playerFlagEmoji}</span>
+                  <span className="profile-header-name">
+                    {playerName || 'Equilibrista'}
+                  </span>
+                  <span className="profile-header-edit">✏️</span>
+                </button>
+                <button
+                  className="icon-btn"
+                  onClick={() => setSoundEnabled((s) => !s)}
+                  title="Sound"
+                >
+                  {soundEnabled ? '🔊' : '🔇'}
+                </button>
+              </div>
+            </div>
+
+            <div className="tab-content-area">
+              {/* TAB 1: INICIO / CAMPAÑA */}
+              {activeTab === 'home' && (
+                <div className="home-card">
+                  <div className="brand-header">
+                    <div className="cover-hero-banner">
+                      <img
+                        src={`${import.meta.env.BASE_URL}icon.jpg`}
+                        alt="NO MIRES ABAJO Portada Oficial"
+                        className="cover-hero-img"
+                      />
+                      <div className="cover-hero-overlay">
+                        <span className="official-badge">
+                          {vipPassActive ? '👑 PASE VIP PRO ACTIVO' : t.officialEdition}
+                        </span>
+                        <h1 className="game-logo-title">{t.title}</h1>
+                        <p className="game-logo-sub">
+                          🗿 {cfg.city.monumentName?.[lang] || t.subtitle}
+                        </p>
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#67e8f9' }}>
-                        +{b.gems} 💎 Gemas | +{b.coins} 🪙 Monedas
+                    </div>
+                  </div>
+
+                  <div
+                    className="city-campaign-card"
+                    onClick={() => setShowCitySelectorModal(true)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="city-flag-circle">{cfg.city.flag}</div>
+                    <div className="city-details">
+                      <div className="city-stage-tag">
+                        {activeVipCity
+                          ? `👑 CIUDAD VIP (x${activeVipCity.rewardMult} PAGO)`
+                          : `${t.worldTour} • ${t.city} ${cfg.cityIndex + 1}/20`}{' '}
+                        <span
+                          style={{
+                            color: '#fde047',
+                            marginLeft: 6,
+                            textDecoration: 'underline',
+                            fontSize: '10px',
+                          }}
+                        >
+                          {lang === 'es' ? '(Cambiar 🌍)' : '(Change 🌍)'}
+                        </span>
+                      </div>
+                      <div className="city-title-text">{cfg.city.name[lang]}</div>
+                      <div className="city-level-sub">
+                        {t.level} {level} • {currentPoleObj.icon}{' '}
+                        {currentPoleObj.name[lang]}
+                      </div>
+                    </div>
+                    <div className="multiplier-chip">x{totalScoreMultiplier}</div>
+                  </div>
+
+                  <div className="quick-stats-grid">
+                    <div className="stat-box">
+                      <span className="stat-lbl">{t.bestScore}</span>
+                      <span className="stat-val">{bestScore.toLocaleString()}</span>
+                    </div>
+                    <div className="stat-box">
+                      <span className="stat-lbl">
+                        {lang === 'es' ? 'MULTI MONEDAS' : 'COIN MULTI'}
+                      </span>
+                      <span className="stat-val gold">x{totalCoinMultiplier} 🪙</span>
+                    </div>
+                  </div>
+
+                  <button className="play-cta-button" onClick={startPlay}>
+                    <span className="play-icon">▶</span> {t.playNow} ({t.level} {level})
+                  </button>
+
+                  <div className="reward-ads-row">
+                    <button
+                      className="ad-reward-btn coins"
+                      onClick={() => setShowAdModal('coins')}
+                    >
+                      🎬 {t.freeCoinsAd}
+                    </button>
+                    <button
+                      className="ad-reward-btn gems"
+                      onClick={() => setShowAdModal('gems')}
+                    >
+                      🎬 {t.freeGemsAd}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: ARMERÍA (BLOQUE 1: NV 1-10 + BLOQUE 2: VARAS 3D + BLOQUE 3: MULTIPLICADORES) */}
+              {activeTab === 'armory' && (
+                <div className="panel-card">
+                  <h2 className="panel-heading">⚙️ {t.armoryTitle}</h2>
+
+                  <div className="section-sub-tabs">
+                    <button
+                      className={`sub-tab-btn ${
+                        armorySubTab === 'upgrades' ? 'active' : ''
+                      }`}
+                      onClick={() => setArmorySubTab('upgrades')}
+                    >
+                      {lang === 'es' ? '⚙️ MEJORAS (1-10)' : '⚙️ UPGRADES (1-10)'}
+                    </button>
+                    <button
+                      className={`sub-tab-btn ${armorySubTab === 'poles' ? 'active' : ''}`}
+                      onClick={() => setArmorySubTab('poles')}
+                    >
+                      {lang === 'es' ? '⚖️ VARAS 3D (5)' : '⚖️ 3D POLES (5)'}
+                    </button>
+                    <button
+                      className={`sub-tab-btn ${
+                        armorySubTab === 'multipliers' ? 'active' : ''
+                      }`}
+                      onClick={() => setArmorySubTab('multipliers')}
+                    >
+                      {lang === 'es' ? '🚀 MULTIPLICADORES' : '🚀 MULTIPLIERS'}
+                    </button>
+                  </div>
+
+                  <div className="items-scroll-list">
+                    {/* SUB-TAB 1: MEJORAS EXPONENCIALES NV 1-5 (MONEDAS) Y NV 6-10 (PRO GEMAS / VIP) */}
+                    {armorySubTab === 'upgrades' && (
+                      <>
+                        {GEAR_ITEMS.map((gItem) => {
+                          const lvl = gearLevels[gItem.id] || 0;
+                          const costInfo = getArmoryUpgradeCost(lvl);
+                          return (
+                            <div key={gItem.id} className="item-card">
+                              <div className="item-icon-box">{gItem.icon}</div>
+                              <div className="item-info">
+                                <div className="item-title">
+                                  {gItem.name[lang]}{' '}
+                                  <span className="lvl-pill">Nv. {lvl}/10</span>
+                                </div>
+                                <div
+                                  className={`benefit-pill-tag ${
+                                    costInfo.isProTier ? 'pro' : ''
+                                  }`}
+                                >
+                                  {costInfo.isProTier
+                                    ? lang === 'es'
+                                      ? '👑 TRAMO ÉLITE PRO (NV. 6 A 10)'
+                                      : '👑 PRO ELITE TIER (LVL 6 TO 10)'
+                                    : gItem.statLabel[lang]}
+                                </div>
+                                <div className="item-desc">{gItem.desc[lang]}</div>
+                                <div className="armory-level-bar">
+                                  {Array.from({ length: 10 }).map((_, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={`armory-pip ${
+                                        idx >= 5 ? 'pro-pip' : ''
+                                      } ${idx < lvl ? 'filled' : ''}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <button
+                                className={`item-action-btn ${
+                                  costInfo.isMax
+                                    ? 'equipped'
+                                    : costInfo.isProTier
+                                    ? 'buy-gems'
+                                    : 'buy-coins'
+                                }`}
+                                disabled={costInfo.isMax}
+                                onClick={() => handleUpgradeGear(gItem)}
+                              >
+                                {costInfo.isMax
+                                  ? t.maxLevel
+                                  : costInfo.isProTier
+                                  ? vipPassActive
+                                    ? '👑 VIP GRATIS'
+                                    : `👑 PRO ${costInfo.gemCost} 💎`
+                                  : `🪙 ${costInfo.coinCost.toLocaleString()}`}
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        <h3 className="sub-section-title">🎪 {t.propsTitle}</h3>
+                        {JUGGLE_PROPS.map((prop) => {
+                          const isOwned = unlockedProps.includes(prop.id);
+                          const isEquipped = equippedProp === prop.id;
+                          return (
+                            <div
+                              key={prop.id}
+                              className={`item-card ${isEquipped ? 'selected' : ''}`}
+                            >
+                              <div className="item-icon-box">{prop.icon}</div>
+                              <div className="item-info">
+                                <div className="item-title">{prop.name[lang]}</div>
+                                <div className="item-desc">
+                                  Multiplicador Base x{prop.mult}
+                                </div>
+                              </div>
+                              <button
+                                className={`item-action-btn ${
+                                  isEquipped
+                                    ? 'equipped'
+                                    : isOwned
+                                    ? 'equip'
+                                    : prop.currency === 'gems'
+                                    ? 'buy-gems'
+                                    : 'buy-coins'
+                                }`}
+                                onClick={() => handleSelectOrBuyProp(prop)}
+                              >
+                                {isEquipped
+                                  ? t.equipped
+                                  : isOwned
+                                  ? t.equip
+                                  : prop.currency === 'gems'
+                                  ? `💎 ${prop.cost}`
+                                  : `🪙 ${prop.cost.toLocaleString()}`}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* SUB-TAB 2: BLOQUE 2 - 5 VARAS DE EQUILIBRIO 3D */}
+                    {armorySubTab === 'poles' &&
+                      BALANCE_POLES.map((pole) => {
+                        const isOwned =
+                          unlockedPoles.includes(pole.id) ||
+                          (pole.isVipOnly && vipPassActive);
+                        const isEquipped = equippedPole === pole.id;
+                        return (
+                          <div
+                            key={pole.id}
+                            className={`item-card ${isEquipped ? 'selected' : ''} ${
+                              pole.isPro ? 'vip-city-card' : ''
+                            }`}
+                          >
+                            <div className="item-icon-box">{pole.icon}</div>
+                            <div className="item-info">
+                              <div className="item-title">{pole.name[lang]}</div>
+                              <div
+                                className={`benefit-pill-tag ${
+                                  pole.isPro ? 'pro' : ''
+                                }`}
+                              >
+                                {pole.badge[lang]}
+                              </div>
+                              <div className="item-desc">{pole.desc[lang]}</div>
+                            </div>
+                            <button
+                              className={`item-action-btn ${
+                                isEquipped
+                                  ? 'equipped'
+                                  : isOwned
+                                  ? 'equip'
+                                  : pole.isPro
+                                  ? 'buy-gems'
+                                  : 'buy-coins'
+                              }`}
+                              onClick={() => handleSelectOrBuyPole(pole)}
+                            >
+                              {isEquipped
+                                ? t.equipped
+                                : isOwned
+                                ? t.equip
+                                : pole.isPro
+                                ? `👑 ${pole.gemCost} 💎`
+                                : `🪙 ${pole.cost.toLocaleString()}`}
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                    {/* SUB-TAB 3: BLOQUE 3.2 - MULTIPLICADORES PERMANENTES */}
+                    {armorySubTab === 'multipliers' &&
+                      PERMANENT_MULTIPLIERS.map((mItem) => {
+                        const isOwned =
+                          ownedMultipliers.includes(mItem.id) ||
+                          (mItem.isVipOnly && vipPassActive);
+                        return (
+                          <div
+                            key={mItem.id}
+                            className={`item-card ${isOwned ? 'selected' : ''} ${
+                              mItem.isPro ? 'vip-city-card' : ''
+                            }`}
+                          >
+                            <div className="item-icon-box">{mItem.icon}</div>
+                            <div className="item-info">
+                              <div className="item-title">{mItem.name[lang]}</div>
+                              <div
+                                className={`benefit-pill-tag ${
+                                  mItem.isPro ? 'pro' : ''
+                                }`}
+                              >
+                                {mItem.badge[lang]}
+                              </div>
+                              <div className="item-desc">{mItem.desc[lang]}</div>
+                            </div>
+                            <button
+                              className={`item-action-btn ${
+                                isOwned
+                                  ? 'equipped'
+                                  : mItem.isPro
+                                  ? 'buy-gems'
+                                  : 'buy-coins'
+                              }`}
+                              onClick={() => handleBuyPermanentMultiplier(mItem)}
+                            >
+                              {isOwned
+                                ? lang === 'es'
+                                  ? 'ACTIVO'
+                                  : 'ACTIVE'
+                                : mItem.isPro
+                                ? `👑 ${mItem.gemCost} 💎`
+                                : `🪙 ${mItem.cost.toLocaleString()}`}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: ASPECTOS CON BENEFICIOS ACTIVOS + VARAS DE EQUILIBRIO */}
+              {activeTab === 'skins' && (
+                <div className="panel-card">
+                  <h2 className="panel-heading">🎭 {t.skinsTitle}</h2>
+                  <p className="panel-sub">{t.skinsSubtitle}</p>
+
+                  <div className="items-scroll-list">
+                    {SKINS.map((sk) => {
+                      const isOwned =
+                        unlockedSkins.includes(sk.id) ||
+                        (sk.isVipOnly && vipPassActive);
+                      const isEquipped = equippedSkin === sk.id;
+                      return (
+                        <div
+                          key={sk.id}
+                          className={`item-card ${isEquipped ? 'selected' : ''} ${
+                            sk.isPro ? 'vip-city-card' : ''
+                          }`}
+                        >
+                          <div
+                            className="item-icon-box"
+                            style={{
+                              background: `linear-gradient(135deg, ${sk.hoodieColor}, ${sk.trimColor})`,
+                            }}
+                          >
+                            {sk.icon}
+                          </div>
+                          <div className="item-info">
+                            <div className="item-title">{sk.name[lang]}</div>
+                            <div
+                              className={`benefit-pill-tag ${sk.isPro ? 'pro' : ''}`}
+                            >
+                              {sk.badge[lang]}
+                            </div>
+                            <div className="item-desc">{sk.desc[lang]}</div>
+                          </div>
+                          <button
+                            className={`item-action-btn ${
+                              isEquipped
+                                ? 'equipped'
+                                : isOwned
+                                ? 'equip'
+                                : sk.isPro
+                                ? 'buy-gems'
+                                : 'buy-coins'
+                            }`}
+                            onClick={() => handleSelectOrBuySkin(sk)}
+                          >
+                            {isEquipped
+                              ? t.equipped
+                              : isOwned
+                              ? t.equip
+                              : sk.isPro
+                              ? `👑 ${sk.gemCost} 💎`
+                              : `🪙 ${sk.cost.toLocaleString()}`}
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    <h3 className="sub-section-title">{t.polesTitle}</h3>
+                    {BALANCE_POLES.map((pole) => {
+                      const isOwned =
+                        unlockedPoles.includes(pole.id) ||
+                        (pole.isVipOnly && vipPassActive);
+                      const isEquipped = equippedPole === pole.id;
+                      return (
+                        <div
+                          key={pole.id}
+                          className={`item-card ${isEquipped ? 'selected' : ''} ${
+                            pole.isPro ? 'vip-city-card' : ''
+                          }`}
+                        >
+                          <div className="item-icon-box">{pole.icon}</div>
+                          <div className="item-info">
+                            <div className="item-title">{pole.name[lang]}</div>
+                            <div
+                              className={`benefit-pill-tag ${pole.isPro ? 'pro' : ''}`}
+                            >
+                              {pole.badge[lang]}
+                            </div>
+                            <div className="item-desc">{pole.desc[lang]}</div>
+                          </div>
+                          <button
+                            className={`item-action-btn ${
+                              isEquipped
+                                ? 'equipped'
+                                : isOwned
+                                ? 'equip'
+                                : pole.isPro
+                                ? 'buy-gems'
+                                : 'buy-coins'
+                            }`}
+                            onClick={() => handleSelectOrBuyPole(pole)}
+                          >
+                            {isEquipped
+                              ? t.equipped
+                              : isOwned
+                              ? t.equip
+                              : pole.isPro
+                              ? `👑 ${pole.gemCost} 💎`
+                              : `🪙 ${pole.cost.toLocaleString()}`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: LIGA MUNDIAL EN VIVO */}
+              {activeTab === 'league' && (
+                <div className="panel-card">
+                  <div className="league-banner-top">
+                    <div>
+                      <div className="season-chip">
+                        {t.seasonTitle}{' '}
+                        <span style={{ color: '#4ade80', marginLeft: 6 }}>
+                          ● {onlineSyncStatus === 'syncing' ? 'SYNC...' : 'ONLINE LIVE'}
+                        </span>
+                      </div>
+                      <h2 className="panel-heading">{t.leagueTitle}</h2>
+                    </div>
+                    <div className="rank-badge-large">#{playerRank}</div>
+                  </div>
+
+                  <div className="player-name-bar">
+                    <div className="profile-active-summary">
+                      <span className="profile-flag-big">{playerFlagEmoji}</span>
+                      <div className="profile-text-col">
+                        <span className="profile-label-mini">
+                          {lang === 'es' ? 'COMPETIDOR OFICIAL' : 'OFFICIAL COMPETITOR'}
+                        </span>
+                        <span className="profile-name-strong">
+                          {playerName || 'Equilibrista'}
+                        </span>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="mini-pill gold"
-                      onClick={() => handleClaimStoreBundle(b)}
+                      className="edit-profile-pill-btn"
+                      onClick={openEditProfileModal}
                     >
-                      {b.tag}
+                      ✏️ {lang === 'es' ? 'Editar Perfil' : 'Edit Profile'}
                     </button>
                   </div>
+
+                  <div className="items-scroll-list">
+                    <div className="leaderboard-box">
+                      {leaderboard.map((row, idx) => (
+                        <div
+                          key={row.id}
+                          className={`leader-row ${row.isPlayer ? 'is-player' : ''}`}
+                        >
+                          <span className="leader-pos">
+                            {idx === 0
+                              ? '🥇'
+                              : idx === 1
+                              ? '🥈'
+                              : idx === 2
+                              ? '🥉'
+                              : `#${idx + 1}`}
+                          </span>
+                          <span className="leader-flag">{row.flag}</span>
+                          <span className="leader-name">
+                            {row.name}
+                            {row.isPlayer
+                              ? lang === 'es'
+                                ? ' (TÚ)'
+                                : ' (YOU)'
+                              : ''}
+                          </span>
+                          <span className="leader-lp">
+                            {(row.lp ?? row.score ?? 0).toLocaleString()} LP
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <h3 className="sub-section-title">🎁 {t.seasonPrizes}</h3>
+                    {SEASON_REWARD_TIERS.map((tier) => {
+                      const claimed = claimedTiers.includes(tier.id);
+                      const canClaim = !claimed && leaguePoints >= tier.requiredLp;
+                      return (
+                        <div key={tier.id} className="item-card">
+                          <div className="item-icon-box">{tier.icon}</div>
+                          <div className="item-info">
+                            <div className="item-title">
+                              {tier.rankLabel} • {tier.title[lang]}
+                            </div>
+                            <div className="item-desc">
+                              {tier.requiredLp.toLocaleString()} LP → +{tier.gemsReward}{' '}
+                              💎 & +{tier.coinsReward.toLocaleString()} 🪙
+                            </div>
+                          </div>
+                          <button
+                            className={`item-action-btn ${
+                              claimed
+                                ? 'equipped'
+                                : canClaim
+                                ? 'buy-coins'
+                                : 'locked'
+                            }`}
+                            disabled={!canClaim}
+                            onClick={() => handleClaimTier(tier)}
+                          >
+                            {claimed
+                              ? t.claimed
+                              : canClaim
+                              ? t.claim
+                              : `${tier.requiredLp} LP`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* TAB 5: TIENDA VIP + MULTIPLICADORES PERMANENTES */}
+              {activeTab === 'store' && (
+                <div className="panel-card">
+                  <h2 className="panel-heading">💎 {t.storeTitle}</h2>
+                  <p className="panel-sub">{t.storeSubtitle}</p>
+
+                  <div className="items-scroll-list">
+                    {STORE_BUNDLES.map((b) => (
+                      <div key={b.id} className="vip-bundle-card">
+                        <div className="vip-bundle-header">
+                          <span className="vip-icon">{b.icon}</span>
+                          <div>
+                            <div className="vip-title">{b.name[lang]}</div>
+                            <div className="vip-rewards-inline">
+                              +{b.gems} 💎 • +{b.coins.toLocaleString()} 🪙
+                            </div>
+                          </div>
+                          <button
+                            className="vip-buy-btn"
+                            onClick={() => handleBuyBundle(b)}
+                          >
+                            {b.isVipPassBundle && vipPassActive
+                              ? '👑 VIP ACTIVO (+BONO)'
+                              : b.tag}
+                          </button>
+                        </div>
+                        <ul className="vip-perk-list">
+                          {b.perks[lang].map((p, i) => (
+                            <li key={i}>✓ {p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    <h3 className="sub-section-title">{t.multipliersTitle}</h3>
+                    {PERMANENT_MULTIPLIERS.map((mItem) => {
+                      const isOwned =
+                        ownedMultipliers.includes(mItem.id) ||
+                        (mItem.isVipOnly && vipPassActive);
+                      return (
+                        <div
+                          key={mItem.id}
+                          className={`item-card ${isOwned ? 'selected' : ''} ${
+                            mItem.isPro ? 'vip-city-card' : ''
+                          }`}
+                        >
+                          <div className="item-icon-box">{mItem.icon}</div>
+                          <div className="item-info">
+                            <div className="item-title">{mItem.name[lang]}</div>
+                            <div
+                              className={`benefit-pill-tag ${mItem.isPro ? 'pro' : ''}`}
+                            >
+                              {mItem.badge[lang]}
+                            </div>
+                            <div className="item-desc">{mItem.desc[lang]}</div>
+                          </div>
+                          <button
+                            className={`item-action-btn ${
+                              isOwned
+                                ? 'equipped'
+                                : mItem.isPro
+                                ? 'buy-gems'
+                                : 'buy-coins'
+                            }`}
+                            onClick={() => handleBuyPermanentMultiplier(mItem)}
+                          >
+                            {isOwned
+                              ? lang === 'es'
+                                ? 'ACTIVO'
+                                : 'ACTIVE'
+                              : mItem.isPro
+                              ? `👑 ${mItem.gemCost} 💎`
+                              : `🪙 ${mItem.cost.toLocaleString()}`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+
+            <nav className="bottom-tab-nav">
+              <button
+                className={`nav-tab-btn ${activeTab === 'home' ? 'active' : ''}`}
+                onClick={() => setActiveTab('home')}
+              >
+                <span className="nav-ic">🏙️</span>
+                <span>{t.tabs.home}</span>
+              </button>
+              <button
+                className={`nav-tab-btn ${activeTab === 'armory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('armory')}
+              >
+                <span className="nav-ic">⚖️</span>
+                <span>{t.tabs.armory}</span>
+              </button>
+              <button
+                className={`nav-tab-btn ${activeTab === 'skins' ? 'active' : ''}`}
+                onClick={() => setActiveTab('skins')}
+              >
+                <span className="nav-ic">🎭</span>
+                <span>{t.tabs.skins}</span>
+              </button>
+              <button
+                className={`nav-tab-btn ${activeTab === 'league' ? 'active' : ''}`}
+                onClick={() => setActiveTab('league')}
+              >
+                <span className="nav-ic">🏆</span>
+                <span>{t.tabs.league}</span>
+              </button>
+              <button
+                className={`nav-tab-btn ${activeTab === 'store' ? 'active' : ''}`}
+                onClick={() => setActiveTab('store')}
+              >
+                <span className="nav-ic">💎</span>
+                <span>{t.tabs.store}</span>
+              </button>
+            </nav>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ==================== MODAL: PAUSE MENU ==================== */}
-      {activeModal === 'PAUSE' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">⏸ {t.pauseTitle}</h2>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '12px' }}>
-              {t.pauseSub}
-            </p>
-
-            <div className="lobby-prep-grid" style={{ marginBottom: '12px' }}>
-              <button
-                type="button"
-                className="lobby-prep-btn cyan-border"
-                onClick={() => setActiveModal('ARMORY')}
-              >
-                <span>⚙️</span>
-                <span>{t.armoryBtn}</span>
+        {/* MODAL DE PAUSA */}
+        {gameState === 'paused' && (
+          <div className="modal-backdrop">
+            <div className="modal-card">
+              <h2 className="modal-title">⏸ {t.pause}</h2>
+              <p className="modal-subtitle">
+                {cfg.city.flag} {cfg.city.name[lang]} — {t.level} {level}
+              </p>
+              <button className="pause-action-btn primary" onClick={triggerPause}>
+                ▶ {t.resume}
               </button>
               <button
-                type="button"
-                className="lobby-prep-btn"
-                onClick={() => setActiveModal('SKINS')}
-              >
-                <span>🧥</span>
-                <span>{t.skinsBtn}</span>
-              </button>
-              <button
-                type="button"
-                className="lobby-prep-btn gold-border"
-                onClick={() => setActiveModal('LEAGUE')}
-              >
-                <span>🏆</span>
-                <span>Liga</span>
-              </button>
-              <button
-                type="button"
-                className="lobby-prep-btn gold-border"
-                onClick={() => setActiveModal('CITIES')}
-              >
-                <span>🌍</span>
-                <span>{t.citiesBtn}</span>
-              </button>
-            </div>
-
-            <div className="pause-menu-stack">
-              <button
-                type="button"
-                className="pause-action-btn resume"
+                className="pause-action-btn secondary"
                 onClick={() => {
-                  engineRef.current.paused = false;
-                  setActiveModal(null);
+                  engineRef.current.running = false;
+                  soundEngine.updateWind(0);
+                  setGameState('menu');
                 }}
               >
-                ▶ {t.resumeBtn}
-              </button>
-              <button
-                type="button"
-                className="pause-action-btn gold"
-                onClick={() => resetEngineForLevel(currentLevel, 'PLAYING')}
-              >
-                🔄 {t.restartBtn}
-              </button>
-              <button
-                type="button"
-                className="pause-action-btn"
-                onClick={() => resetEngineForLevel(currentLevel, 'LOBBY')}
-              >
-                🏠 {t.backToLobbyBtn}
+                🏠 {t.backToMenu}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ==================== MODAL: LEVEL VICTORY ==================== */}
-      {gameStatus === 'VICTORY' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 className="modal-title">🏆 {t.levelCleared}</h2>
-            </div>
-
-            <div
-              className="item-card highlight"
-              style={{ textAlign: 'center', marginBottom: '14px' }}
-            >
-              <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>
-                {currentCity.flag} {currentCity.name[lang]} — {t.level} {currentLevel}
+        {/* MODAL DE VICTORIA */}
+        {gameState === 'victory' && (
+          <div className="modal-backdrop">
+            <div className="modal-card victory">
+              <div className="modal-Cover-icon-wrap">
+                <img
+                  src={`${import.meta.env.BASE_URL}icon.jpg`}
+                  alt="NO MIRES ABAJO"
+                  className="modal-cover-thumb"
+                />
               </div>
-              <div
-                style={{
-                  fontSize: '0.95rem',
-                  color: '#4ade80',
-                  fontWeight: 800,
-                  marginTop: '6px',
-                }}
-              >
-                +{engineRef.current.coinsEarnedRun} 🪙 | +
-                {engineRef.current.lpEarnedRun} 🏆 LP
+              <h2 className="modal-title">{t.victoryTitle}</h2>
+              <p className="modal-subtitle">
+                {cfg.city.flag} {cfg.city.name[lang]} • {t.level} {level}
+              </p>
+
+              <div className="rewards-summary-box">
+                <div className="reward-line">
+                  <span>{t.score}</span>
+                  <strong>{runResult.scoreEarned.toLocaleString()}</strong>
+                </div>
+                <div className="reward-line gold">
+                  <span>{t.coinsEarned}</span>
+                  <strong>+{runResult.coinsEarned.toLocaleString()} 🪙</strong>
+                </div>
+                {runResult.gemsEarned > 0 && (
+                  <div className="reward-line cyan">
+                    <span>{lang === 'es' ? 'Gemas Ganadas' : 'Gems Earned'}</span>
+                    <strong>+{runResult.gemsEarned} 💎</strong>
+                  </div>
+                )}
+                <div className="reward-line cyan">
+                  <span>{t.leaguePointsEarned}</span>
+                  <strong>+{runResult.lpEarned} 🏆</strong>
+                </div>
               </div>
-            </div>
 
-            <div className="pause-menu-stack">
-              <button
-                type="button"
-                className="cta-giant-btn"
-                onClick={() => {
-                  const nextLvl = Math.min(100, currentLevel + 1);
-                  setCurrentLevel(nextLvl);
-                  resetEngineForLevel(nextLvl, 'PLAYING');
-                }}
-              >
-                ▶ {t.nextLevel} ({Math.min(100, currentLevel + 1)}/100)
+              {!runResult.doubled && (
+                <button
+                  className="pause-action-btn ad-gold"
+                  onClick={() => setShowAdModal('double')}
+                >
+                  {t.doubleRewardsAd}
+                </button>
+              )}
+
+              <button className="pause-action-btn primary" onClick={handleNextLevel}>
+                {t.nextLevel} ({t.level} {level + 1}) ➔
               </button>
               <button
-                type="button"
-                className="pause-action-btn"
-                onClick={() => {
-                  const nextLvl = Math.min(100, currentLevel + 1);
-                  setCurrentLevel(nextLvl);
-                  resetEngineForLevel(nextLvl, 'LOBBY');
-                }}
+                className="pause-action-btn secondary"
+                onClick={() => setGameState('menu')}
               >
-                🏠 {t.backToLobbyBtn}
+                🏠 {t.backToMenu}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ==================== MODAL: GAME OVER / LOSS AVERSION ==================== */}
-      {gameStatus === 'GAMEOVER' && (
-        <div className="modal-backdrop">
-          <div className="modal-card loss-aversion">
-            <div className="modal-header">
-              <h2 className="modal-title" style={{ color: '#fca5a5' }}>
-                ⚠️ {t.fellTitle}
-              </h2>
-            </div>
+        {/* MODAL DE CAÍDA / GAME OVER */}
+        {gameState === 'gameover' && (
+          <div className="modal-backdrop">
+            <div className="modal-card gameover">
+              <div className="modal-Cover-icon-wrap">
+                <img
+                  src={`${import.meta.env.BASE_URL}icon.jpg`}
+                  alt="NO MIRES ABAJO"
+                  className="modal-cover-thumb"
+                />
+              </div>
+              <h2 className="modal-title">{t.fallTitle}</h2>
+              <p className="modal-subtitle">{t.fallSub}</p>
 
-            <p style={{ fontSize: '0.92rem', color: '#fef2f2', marginBottom: '14px' }}>
-              {t.fellSub}{' '}
-              <strong>
-                ({hudState.distance}m / {hudState.targetDistance}m)
-              </strong>
-            </p>
+              <div className="rewards-summary-box">
+                <div className="reward-line">
+                  <span>{t.score}</span>
+                  <strong>{runResult.scoreEarned.toLocaleString()}</strong>
+                </div>
+                <div className="reward-line gold">
+                  <span>{t.coinsEarned}</span>
+                  <strong>+{runResult.coinsEarned.toLocaleString()} 🪙</strong>
+                </div>
+                <div className="reward-line cyan">
+                  <span>{t.leaguePointsEarned}</span>
+                  <strong>+{runResult.lpEarned} 🏆</strong>
+                </div>
+              </div>
 
-            <div className="pause-menu-stack">
-              <button
-                type="button"
-                className="cta-giant-btn"
-                onClick={handleGrappleSave}
-              >
-                🪝 {t.continueHook}
+              {!runResult.revivedOnce && (
+                <button
+                  className="pause-action-btn ad-gold"
+                  onClick={() => setShowAdModal('revive')}
+                >
+                  {t.reviveAd}
+                </button>
+              )}
+
+              <button className="pause-action-btn primary" onClick={startPlay}>
+                🔄 {t.retry}
               </button>
-
               <button
-                type="button"
-                className="pause-action-btn"
-                onClick={() => resetEngineForLevel(currentLevel, 'PLAYING')}
+                className="pause-action-btn secondary"
+                onClick={() => setGameState('menu')}
               >
-                🔄 {t.retryFree}
-              </button>
-
-              <button
-                type="button"
-                className="pause-action-btn"
-                onClick={() => resetEngineForLevel(currentLevel, 'LOBBY')}
-              >
-                🏠 {t.backToLobbyBtn}
+                🏠 {t.backToMenu}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* SIMULADOR DE ANUNCIO BONIFICADO */}
+        {showAdModal && (
+          <div className="modal-backdrop ad-layer">
+            <div className="modal-card">
+              <div className="modal-big-icon">🎬</div>
+              <h2 className="modal-title">{t.adWatching}</h2>
+              <p className="modal-subtitle">
+                {adTimer > 0 ? `${t.adSeconds} ${adTimer}s...` : '✅ ¡Listo!'}
+              </p>
+              <button
+                className="pause-action-btn primary"
+                disabled={adTimer > 0}
+                onClick={completeAdReward}
+              >
+                {adTimer > 0 ? `${adTimer}s` : t.adCollect}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
